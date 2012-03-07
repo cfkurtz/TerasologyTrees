@@ -32,26 +32,27 @@ import numpy as np
 # -------------------------------------------------------------------------------------------
 
 # DONE set up sequenced output dirs
-
+# DONE make branches have non-perpendicular angles
 # DONE make non-woody stems photosynthesize, a little
-# improve photosynthesis - use sun array, use s curve
-# draw sun array on graph
+# DONE improve photosynthesis - use sun array
+# DONE draw sun array on graph
+# DONE add apical dominance
+# DONE make absolute limit on how many internodes can be created - to prevent params blowing up
+# DONE use s curve for photosynthesis
+# DONE??? put random number on seed unique to plant
 
-# add apical dominance
+# problem: gaps
 
-# fix up placement of meristems and leaves?
 # add internode width
-# check claiming system for space
-# think about collision avoidance and growth around occupied blocks
 
 # read parameters from file
 # add limits on parameters
-# add limit on overall size of plant (as check on params)
 
-# put in root growth
 # put in inflorescences, flowers and fruits
-
+# put in root growth
 # do water and nutrient uptake - water and nutrient grids, like sun grid
+
+# NOT DOING think about collision avoidance and growth around occupied blocks
 
 # -------------------------------------------------------------------------------------------
 # graphing
@@ -110,16 +111,29 @@ def setUpOutputFolder(folder):
 # space (block) management functions
 # -------------------------------------------------------------------------------------------
 
+# generate space
 space = {}
 sizeOfSpace = 100
 for i in range(sizeOfSpace):
 	for j in range(sizeOfSpace):
 		for k in range (sizeOfSpace):
 			space[(i,j,k)] = None
+			
+# generate patchy sun map
 sun = {}
+highestSun = 0
 for i in range(sizeOfSpace):
 	for j in range(sizeOfSpace):
-		sun[(i,j)] = min(1.0, max(0.0, np.random.normal(50, 25, 1)[0] / 100.0))
+		sun[(i,j)] = 0.2 + abs(math.sin(1.0*i/10) + math.cos(1.0*j/10))
+		if sun[(i,j)] > highestSun:
+			highestSun = sun[(i,j)]
+		#print 'before', sun[(i,j)]
+		
+# normalize sun map
+for i in range(sizeOfSpace):
+	for j in range(sizeOfSpace):
+		sun[(i,j)] = sun[(i,j)] / highestSun
+		#print sun[(i,j)]
 		
 def displacementInDirection(location, direction, amount):
 	#print location, direction
@@ -140,9 +154,9 @@ def displacementInDirection(location, direction, amount):
 		newY -= amount
 	else:
 		raise Exception("invalid direction - %s" % direction)
-	newX = max(0, min(sizeOfSpace, newX))
-	newY = max(0, min(sizeOfSpace, newY))
-	newZ = max(0, min(sizeOfSpace, newZ))
+	newX = max(0, min(sizeOfSpace-1, newX))
+	newY = max(0, min(sizeOfSpace-1, newY))
+	newZ = max(0, min(sizeOfSpace-1, newZ))
 	return (newX, newY, newZ)
 
 def dimensionForDirection(direction):
@@ -205,6 +219,19 @@ def locationsBetweenTwoPoints(firstLocation, secondLocation, length):
 def locationIsInUse(location):
 	return space[location] != None
 
+def blocksOccupiedAboveLocation(location, plantPart):
+	x = location[0]
+	y = location[1]
+	z = location[2]
+	result = 0
+	zAbove = min(sizeOfSpace-1, z+1)
+	while zAbove <= sizeOfSpace-1:
+		locationAbove = (x, y, zAbove)
+		if space[locationAbove] != None and not (space[locationAbove] is plantPart):
+			result += 1
+		zAbove += 1
+	return result
+
 def claimLocation(location, plantPart):
 	space[location] = plantPart
 	
@@ -220,6 +247,9 @@ def clearSpace():
 def colorForLocation(location):
 	if space.has_key(location):
 		plantPart = space[location]
+		#if plantPart:
+		#	return str(min(1.0, plantPart.biomass/30.0))
+		#return None
 		name = plantPart.__class__.__name__
 		if name == "Meristem":
 			return COLOR_MERISTEM
@@ -232,6 +262,8 @@ def colorForLocation(location):
 			return COLOR_LEAF
 		# cfk add others later
 	return None
+
+#http://www.helixsoft.nl/articles/circle/sincos.htm
 
 # -------------------------------------------------------------------------------------------
 # parameters
@@ -246,22 +278,28 @@ BRANCHES_PER_ROOT_INTERNODE = 1
 FIRST_INTERNODE_FORWARD_DIRECTION = "up"
 FIRST_INTERNODE_SIDE_DIRECTION = "east"
 INTERNODE_LENGTH_AT_FULL_SIZE = 10
+INTERNODE_START_LENGTH = 3
 INTERNODE_WIDTH_AT_FULL_SIZE = 1 # not doing > 1 yet
+
+# BRANCHING
+BRANCHING_PROBABILITY = 1.0
 APICAL_DOMINANCE_EXTENDS_FOR = 10
 ANGLE_BETWEEN_STEM_AND_BRANCH = 40
 RANDOM_INTERNODE_SWAY = 10
+MAX_NUM_INTERNODES_ON_PLANT_EVER = 100 # this is a check on all the other parameters blowing up into a giant plant
 
 # BIOMASS
-OPTIMAL_LEAF_BIOMASS = 5
-OPTIMAL_INTERNODE_BIOMASS = 5
+OPTIMAL_LEAF_BIOMASS = 8
+OPTIMAL_INTERNODE_BIOMASS = 10
 START_LEAF_BIOMASS = 1
 START_INTERNODE_BIOMASS = 1
-START_MERISTEM_BIOMASS = 10
+START_MERISTEM_BIOMASS = 3
 
 # UPTAKE
-BIOMASS_MADE_BY_LEAF_PER_DAY_OF_PHOTOSYNTHESIS_WITH_FULL_SUN = 4
-BIOMASS_MADE_BY_NON_WOODY_INTERNODE_PER_DAY_WITH_FULL_SUN = 0.5
+BIOMASS_MADE_BY_FULL_SIZED_LEAF_PER_DAY_OF_PHOTOSYNTHESIS_WITH_FULL_SUN = 15
+BIOMASS_MADE_BY_FULL_SIZED_NON_WOODY_INTERNODE_PER_DAY_WITH_FULL_SUN = 3
 INTERNODES_TURN_WOODY_AFTER_THIS_MANY_DAYS = 10
+SHADE_TOLERANCE = 10
 
 # CONSUMPTION
 BIOMASS_USED_BY_LEAF_PER_DAY = 0.5
@@ -283,7 +321,7 @@ DEATH_BIOMASS_INTERNODE = 0.01
 DEATH_BIOMASS_MERISTEM = 0.5
 
 # DRAWING
-COLOR_MERISTEM = "#FF0000" # "#7CFC00"
+COLOR_MERISTEM = "#7CFC00"
 COLOR_INTERNODE_WOODY = "#CC7F32"
 COLOR_INTERNODE_NONWOODY = "#CCFFCC"
 COLOR_LEAF = "#488214"
@@ -303,23 +341,45 @@ class PlantPart():
 		self.forward = forward
 		self.side = side
 		self.location = location
+		self.blocks = []
 		
 	def nextDay(self):
-		self.nextDay_Uptake()
 		if self.nextDay_Consumption():
 			self.nextDay_Distribution()
 			self.nextDay_Growth()
 			self.nextDay_SignalPropagation()
+			self.nextDay_Uptake()
 		self.age += 1
 	
 	def releaseAllUsedBlocks(self):
 		for location in self.blocks:
 			if location != self.location:
 				releaseLocation(location)
+		self.blocks = []
 				
 	def claimStartBlock(self):
 		self.blocks = [self.location]
 		claimLocation(self.location, self)
+		
+	def calculatePhotosynthesis(self, location, optimalAmount):
+		# used by leaf and internode so to avoid duplication, keep here
+		# 1. the more sun where you are, the more you can get at
+		sunProportion = sun[(location[0], location[1])]
+		# 2. the higher you are the more sun you get (but this is a smaller factor)
+		heightProportion = 0.8 + 0.2 * (1.0 * location[2] / sizeOfSpace)
+		# 3. the more things above you the less light you get
+		numBlocksShadingMe = blocksOccupiedAboveLocation(location, self)
+		if numBlocksShadingMe > 0:
+			shadeProportion = max(0.0, min(1.0, 1.0 - 1.0 * numBlocksShadingMe / SHADE_TOLERANCE))
+		else:
+			shadeProportion = 1.0
+		# 4. all of these effects multiply
+		combinedEffectsProportion = sunProportion * heightProportion * shadeProportion
+		# 5. photosynthesis depends on biomass accumulated (water and nutrients later)
+		photosynthesisProportion = combinedEffectsProportion * (1.0 - math.exp(-0.65 * self.biomass))
+		# 5. finally we end up with a proporton of the optimal
+		newBiomass = photosynthesisProportion * optimalAmount
+		return newBiomass
 		
 # -------------------------------------------------------------------------------------------
 class Meristem(PlantPart):
@@ -333,14 +393,23 @@ class Meristem(PlantPart):
 		
 	def buildInternode(self, firstOnPlant=False):
 		if self.apical:
-			side = rotateAround(self.forward, self.side, 1)
+			newSide = rotateAround(self.forward, self.side, 1)
+			if self.parent:
+				parentBranchForward = self.parent.parentBranchForward
+			else:
+				parentBranchForward = FIRST_INTERNODE_FORWARD_DIRECTION
+			#print 'building internode, forward', self.forward, 'side', newSide
 		else:   
 			if self.parent:
-				side = self.parent.forward
+				newSide = self.side
+				parentBranchForward = self.parent.forward
 			else:
-				side = FIRST_INTERNODE_SIDE_DIRECTION
+				newSide = FIRST_INTERNODE_SIDE_DIRECTION
+				parentBranchForward = FIRST_INTERNODE_FORWARD_DIRECTION
 		firstOnBranch = firstOnPlant or not self.apical
-		newInternode = Internode(self.plant, self.parent, self.location, self.forward, side, firstOnPlant=firstOnPlant, firstOnBranch=firstOnBranch)
+		
+		newInternode = Internode(self.plant, self.parent, self.location, self.forward, newSide, 
+								firstOnPlant=firstOnPlant, firstOnBranch=firstOnBranch, parentBranchForward=parentBranchForward)
 		if self.parent:
 			if self.apical:
 				self.parent.addChildInternode(newInternode)
@@ -354,8 +423,8 @@ class Meristem(PlantPart):
 	def nextDay_Consumption(self):
 		alive = True
 		if self.biomass - BIOMASS_USED_BY_MERISTEM_PER_DAY < DEATH_BIOMASS_MERISTEM:
-			self.parent.meristemDied(self)
 			alive = False
+			self.die()
 		else:
 			if self.apical:
 				self.active = True
@@ -369,12 +438,11 @@ class Meristem(PlantPart):
 		pass
 	
 	def nextDay_Growth(self):
+		self.releaseAllUsedBlocks()
 		if self.active:
 			if self.biomass >= BIOMASS_TO_MAKE_ONE_PHYTOMER:
 				self.buildInternode()
 				self.parent.removeMeristemThatMadeInternode(self)
-			
-		#self.releaseAllUsedBlocks()
 		if self.apical:
 			location, forward, side = self.parent.apicalMeristemLocationAndDirections()
 		else:
@@ -383,18 +451,30 @@ class Meristem(PlantPart):
 		self.claimStartBlock()
 		
 	def calculateActivityLevel(self):
+		# do this even if they are active, in case somebody snipped off the apical bud
+		distance = self.distanceOfParentFromBranchApex()
+		if self.plant.numInternodesCreated <= MAX_NUM_INTERNODES_ON_PLANT_EVER:
+			if distance == 0:
+				probability = 0
+			else:
+				probability = BRANCHING_PROBABILITY * max(0.0, min(1.0, 1.0 * distance / APICAL_DOMINANCE_EXTENDS_FOR))
+			randomNumber = random.random() 
+			self.active = randomNumber < probability
+		#print 'axillary meristem distance', distance, 'prob', probability, 'number', randomNumber, 'active', self.active
+		
+	def die(self):
+		self.parent.meristemDied(self)
+		self.releaseAllUsedBlocks()
+		
+	def distanceOfParentFromBranchApex(self):
 		distance = 0
 		internode = self.parent
 		while internode and internode.child:
 			distance += 1
 			internode = internode.child
-		if distance == 0:
-			probability = 0
-		else:
-			probability = max(0.0, min(1.0, 1.0 * distance / APICAL_DOMINANCE_EXTENDS_FOR))
-		randomNumber = random.random() 
-		self.active = randomNumber < probability
-		#print 'axillary meristem distance', distance, 'prob', probability, 'number', randomNumber, 'active', self.active
+		if internode and not internode.apicalMeristem: # apical meristem is missing, perhaps removed
+			distance = 0
+		return distance
 		
 	def nextDay_SignalPropagation(self):
 		pass
@@ -415,17 +495,20 @@ class Meristem(PlantPart):
 # -------------------------------------------------------------------------------------------
 class Internode(PlantPart):
 # -------------------------------------------------------------------------------------------
-	def __init__(self, plant, parent, location, forward, side, firstOnPlant, firstOnBranch):
+	def __init__(self, plant, parent, location, forward, side, firstOnPlant, firstOnBranch, parentBranchForward):
 		PlantPart.__init__(self, plant, parent, location, forward, side, biomass=START_INTERNODE_BIOMASS, water=0, minerals=0)
 		#print '>>>>>>> internode being created with forward', forward, 'side', side
 		self.child = None
 		self.branches = []
 		self.firstOnPlant = firstOnPlant
 		self.firstOnBranch = firstOnBranch
+		self.parentBranchForward = parentBranchForward
+		self.plant.numInternodesCreated += 1
+		
 		self.woody = (INTERNODES_TURN_WOODY_AFTER_THIS_MANY_DAYS == 0)
-		self.length = 2
+		self.length = INTERNODE_START_LENGTH
 		self.width = 1
-		self.recalculateBlocks()
+		self.recalculateBlockPlacementsForChangeInLength()
 		
 		self.buildLeaves()
 		self.buildMeristems()
@@ -452,39 +535,39 @@ class Internode(PlantPart):
 	
 	def axillaryMeristemLocationAndDirections(self, meristemNumber):
 		if LEAVES_PER_INTERNODE == 1:
-			forward = self.side
+			meristemForward = self.side
 		elif LEAVES_PER_INTERNODE == 2:
 			if meristemNumber == 1:
-				forward = self.side
+				meristemForward = self.side
 			else:
-				forward = rotateAround(self.forward, self.side, 2)
+				meristemForward = rotateAround(self.forward, self.side, 2)
 		else:
 			if meristemNumber == 1:
-				forward = self.side
+				meristemForward = self.side
 			else:
-				forward = rotateAround(self.forward, self.side, meristemNumber)
-		location = displacementInDirection(self.endLocation, forward, 1)
-		side = self.forward
-		return location, forward, side
+				meristemForward = rotateAround(self.forward, self.side, meristemNumber)
+		location = displacementInDirection(self.endLocation, meristemForward, 1)
+		meristemSide = self.forward
+		return location, meristemForward, meristemSide
 		
 	def leafLocationAndDirections(self, leafNumber):
 		#print "leafLocationAndDirections", self.forward, self.side
 		locationOneDownFromEnd = displacementInDirection(self.endLocation, self.forward, -1)
 		if LEAVES_PER_INTERNODE == 1:
-			forward = self.side
+			leafForward = self.side
 		elif LEAVES_PER_INTERNODE == 2:
 			if leafNumber == 1:
-				forward = self.side
+				leafForward = self.side
 			else:
-				forward = rotateAround(self.forward, self.side, 2)
+				leafForward = rotateAround(self.forward, self.side, 2)
 		else:
 			if leafNumber == 1:
-				forward = self.side
+				leafForward = self.side
 			else:
-				forward = rotateAround(self.forward, self.side, leafNumber)
-		location = displacementInDirection(locationOneDownFromEnd, forward, 1)
-		side = self.forward
-		return location, forward, side
+				leafForward = rotateAround(self.forward, self.side, leafNumber)
+		location = displacementInDirection(locationOneDownFromEnd, leafForward, 1)
+		leafSide = self.forward
+		return location, leafForward, leafSide
 	
 	def addChildInternode(self, internode):
 		self.child = internode
@@ -517,12 +600,9 @@ class Internode(PlantPart):
 		self.leaves.remove(leaf)
 				
 	def nextDay_Uptake(self):
-		# replace with reading from sun array by location
-		# also check shading by other things above at that xy point
-		randomSunProportion = min(1.0, max(0.0, np.random.normal(50, 25, 1)[0] / 100.0))
-		# cfk replace with s curve later
-		newBiomass = BIOMASS_MADE_BY_NON_WOODY_INTERNODE_PER_DAY_WITH_FULL_SUN * randomSunProportion
-		self.biomass += newBiomass
+		if not self.woody:
+			newBiomass = self.calculatePhotosynthesis(self.endLocation, BIOMASS_MADE_BY_FULL_SIZED_NON_WOODY_INTERNODE_PER_DAY_WITH_FULL_SUN)
+			self.biomass += newBiomass
 	
 	def nextDay_Consumption(self):
 		alive = True
@@ -530,11 +610,24 @@ class Internode(PlantPart):
 			# internodes can only die if they have no children
 			if not self.child:
 				if self.parent:
-					self.parent.internodeDied(self)
+					self.die()
 				alive = False
 		else:
 			self.biomass -= max(DEATH_BIOMASS_INTERNODE, BIOMASS_USED_BY_INTERNODE_PER_DAY)
 		return alive
+	
+	def die(self):
+		self.releaseAllUsedBlocks()
+		self.parent.internodeDied(self)
+		sendDieSignalTo = []
+		sendDieSignalTo.extend(self.leaves)
+		sendDieSignalTo.extend([self.apicalMeristem])
+		sendDieSignalTo.extend(self.axillaryMeristems)
+		sendDieSignalTo.extend([self.child])
+		sendDieSignalTo.extend(self.branches)
+		for sendTo in sendDieSignalTo:
+			if sendTo:
+				sendTo.die()
 	
 	def nextDay_Distribution(self):
 		supplicants = []
@@ -563,64 +656,7 @@ class Internode(PlantPart):
 		self.woody = self.age > INTERNODES_TURN_WOODY_AFTER_THIS_MANY_DAYS
 		proportion = self.biomass / OPTIMAL_INTERNODE_BIOMASS
 		self.length = max(1, min(INTERNODE_LENGTH_AT_FULL_SIZE, int(round(proportion * INTERNODE_LENGTH_AT_FULL_SIZE))))
-		self.claimStartBlock()
-		
-		# calculate which two dimensions to use the angle of departure between
-		# first yours, then your parent branch's: the angle goes between them
-		myForwardDimension = dimensionForDirection(self.forward)
-		parentBranchDimension = dimensionForDirection(self.getForwardDirectionOfParentOfFirstInternodeOnBranch())
-		
-		# calculate the end position in those two dimensions only
-		angleInRadians = 1.0 * ANGLE_BETWEEN_STEM_AND_BRANCH * math.pi / 180.0 
-		swayInDegrees = random.randrange(RANDOM_INTERNODE_SWAY) - RANDOM_INTERNODE_SWAY * 2
-		swayInRadians = swayInDegrees * math.pi / 180.0
-		angleInRadians += swayInRadians
-		movementInMyForwardDimension = self.length * math.sin(angleInRadians)
-		movmentInDimensionOfParentBranch = self.length * math.cos(angleInRadians)
-		# based on that calculation, set two of the three end point values
-		valueNotSet = -999999999
-		newLocation = [valueNotSet, valueNotSet, valueNotSet]
-		# set the one corresponding to my forward direction
-		myForwardIndex = xyzTupleIndexForDimensionName(myForwardDimension)
-		if myForwardDimension.find('-') >= 0:
-			myForwardMultiplier = -1
-		else:
-			myForwardMultiplier = 1
-		newLocation[myForwardIndex] = self.location[myForwardIndex] + myForwardMultiplier * movementInMyForwardDimension
-		# set the one corresponding to my parent branch's forward direction
-		parentBranchIndex = xyzTupleIndexForDimensionName(parentBranchDimension)
-		if parentBranchDimension.find('-') >= 0:
-			parentBranchMultiplier = -1
-		else:
-			parentBranchMultiplier = 1
-		newLocation[parentBranchIndex] = self.location[parentBranchIndex] + parentBranchMultiplier * movmentInDimensionOfParentBranch
-		# set the one value not set to what it was before
-		# meaning, the movement was in two planes but not the third
-		for index in range(len(newLocation)):
-			if newLocation[index] == valueNotSet:
-				newLocation[index] = self.location[index]
-		self.endLocation = (int(round(newLocation[0])), int(round(newLocation[1])), int(round(newLocation[2])))
-		#print 'length', self.length, 'start', self.location, 'end', self.endLocation
-		#print '.... myForwardDimension', myForwardDimension, 'parentBranchDimension', parentBranchDimension
-		#print '........ movementInMyForwardDimension', movementInMyForwardDimension, 'movmentInDimensionOfParentBranch', movmentInDimensionOfParentBranch
-		locationsBetween = locationsBetweenTwoPoints(self.location, self.endLocation, self.length * 2)
-		for location in locationsBetween:
-			claimLocation(location, self)
-			self.blocks.append(location)
-		claimLocation(self.endLocation, self)
-		self.blocks.append(self.endLocation)
-		
-	def getForwardDirectionOfParentOfFirstInternodeOnBranch(self):
-		internode = self.parent
-		if not internode:
-			return FIRST_INTERNODE_FORWARD_DIRECTION
-		while internode and not internode.firstOnBranch:
-			if not internode.firstOnBranch:
-				internode = internode.parent
-		if internode.parent:
-			return internode.parent.forward
-		else:
-			return FIRST_INTERNODE_FORWARD_DIRECTION
+		self.recalculateBlockPlacementsForChangeInLength()
 		
 	def nextDay_SignalPropagation(self):
 		sendNextDayTo = []
@@ -632,30 +668,71 @@ class Internode(PlantPart):
 		for sendTo in sendNextDayTo:
 			if sendTo:
 				sendTo.nextDay()
-
-	def recalculateBlocks(self):
+		
+	def recalculateBlockPlacementsForChangeInLength(self):
+		self.releaseAllUsedBlocks()
+		# calculate which two dimensions to use the branching angle
+		# it goes between your parent branch's forward dimension and your forward dimension
+		# calculate the end position in those two dimensions only
+		forwardDimension = dimensionForDirection(self.forward)
+		parentBranchDimension = dimensionForDirection(self.parentBranchForward)
+		
+		# calculate the angle to be applied to the two dimensions: the standard angle plus some random sway
+		angle = 1.0 * ANGLE_BETWEEN_STEM_AND_BRANCH * math.pi / 180.0 
+		sway = (random.randrange(RANDOM_INTERNODE_SWAY) - RANDOM_INTERNODE_SWAY * 2) * math.pi / 180.0
+		angle += sway
+		
+		# calculate xy positions in whatever plane is being considered
+		movementInForwardDimension = self.length * math.sin(angle)
+		movementInParentBranchDimension = self.length * math.cos(angle)
+		
+		# based on that calculation, set two of the three end point values
+		# note that newLocation has to be an array rather than a tuple because you can't set tuple values individually
+		valueNotSet = -999999999
+		newLocation = [valueNotSet, valueNotSet, valueNotSet]
+		
+		# set the value for the dimension corresponding to your forward direction
+		forwardDimensionIndex = xyzTupleIndexForDimensionName(forwardDimension)
+		# if they were heading in a negative dimension (down, south, west) prepare to subtract rather than add the movement
+		if forwardDimension.find('-') >= 0:
+			forwardMultiplier = -1
+		else:
+			forwardMultiplier = 1
+		newLocation[forwardDimensionIndex] = self.location[forwardDimensionIndex] + forwardMultiplier * movementInForwardDimension
+		
+		# set the value for the dimension corresponding to the parent branch's forward direction
+		parentBranchDimensionIndex = xyzTupleIndexForDimensionName(parentBranchDimension)
+		if parentBranchDimension.find('-') >= 0:
+			parentBranchMultiplier = -1
+		else:
+			parentBranchMultiplier = 1
+		newLocation[parentBranchDimensionIndex] = self.location[parentBranchDimensionIndex] + parentBranchMultiplier * movementInParentBranchDimension
+		
+		# now set the one remaining value not set, keeping the value it had before
+		# because the movement was in two dimensions but not in the third
+		for index in range(len(newLocation)):
+			if newLocation[index] == valueNotSet:
+				newLocation[index] = self.location[index]
+				
+		newX = max(0, min(sizeOfSpace-1, int(round(newLocation[0]))))
+		newY = max(0, min(sizeOfSpace-1, int(round(newLocation[1]))))
+		newZ = max(0, min(sizeOfSpace-1, int(round(newLocation[2]))))
+		self.endLocation = (newX, newY, newZ)
+				
+		#print 'length', self.length, 'start', self.location, 'end', self.endLocation
+		#print '.... forwardDimension', forwardDimension, 'parentBranchDimension', parentBranchDimension
+		#print '........ movementInForwardDimension', movementInForwardDimension, 'movementInParentBranchDimension', movementInParentBranchDimension
+		
+		# now interpolate between the start and end positions to produce a rough line
+		locationsBetween = locationsBetweenTwoPoints(self.location, self.endLocation, self.length * 2)
+		
+		# place yourself in the locations
 		self.claimStartBlock()
-		lastLocationSet = self.location
-		helioTropism = 2
-		for i in range(self.length): # width only 1 for now
-			# 30, 45, 60, 90, 120, 135, 150
-			nextLocation = displacementInDirection(lastLocationSet, self.forward, 1)
-			if self.forward in ["north", "south", "east", "west"]:
-				if helioTropism == 1:
-					if i % 2 == 0:
-						nextLocation = displacementInDirection(nextLocation, "up", 1)
-				elif helioTropism == 2:
-					if i % 2 == 0:
-						nextLocation = displacementInDirection(nextLocation, "up", 1)
-						claimLocation(nextLocation, self)
-						self.blocks.append(nextLocation)
-						nextLocation = displacementInDirection(nextLocation, self.forward, -1)
-			#elif self.forward == "down":
-			#	nextLocation = displacementInDirection(nextLocation, "north", 1)
-			claimLocation(nextLocation, self)
-			self.blocks.append(nextLocation)
-			lastLocationSet = nextLocation
-		self.endLocation = lastLocationSet
+		claimLocation(self.endLocation, self)
+		self.blocks.append(self.endLocation)
+		for location in locationsBetween:
+			claimLocation(location, self)
+			self.blocks.append(location)
 		
 	def display(self, indentCounter=0):
 		print INDENT * indentCounter, 'internode: biomass', self.biomass, ", forward", self.forward, ", side", self.side
@@ -674,24 +751,24 @@ class Leaf(PlantPart):
 	def __init__(self, plant, parent, numberOnInternode, location, forward, side):
 		PlantPart.__init__(self, plant, parent, location, forward, side, biomass=START_LEAF_BIOMASS, water=0, minerals=0)
 		self.numberOnInternode = numberOnInternode
+		self.length = 1
 				
 	def nextDay_Uptake(self):
-		sun[(i,j)]
-		# replace with reading from sun array by location
-		# also check shading by other things above at that xy point
-		randomSunProportion = min(1.0, max(0.0, np.random.normal(50, 25, 1)[0] / 100.0))
-		# cfk replace with s curve later
-		newBiomass = BIOMASS_MADE_BY_LEAF_PER_DAY_OF_PHOTOSYNTHESIS_WITH_FULL_SUN * randomSunProportion
+		newBiomass = self.calculatePhotosynthesis(self.location, BIOMASS_MADE_BY_FULL_SIZED_LEAF_PER_DAY_OF_PHOTOSYNTHESIS_WITH_FULL_SUN)
 		self.biomass += newBiomass
 	
 	def nextDay_Consumption(self):
 		alive = True
 		if self.biomass - BIOMASS_USED_BY_LEAF_PER_DAY < DEATH_BIOMASS_LEAF:
-			self.parent.leafDied(self)
+			self.die()
 			alive = False
 		else:
 			self.biomass -= BIOMASS_USED_BY_LEAF_PER_DAY
 		return alive
+	
+	def die(self):
+		self.releaseAllUsedBlocks()
+		self.parent.leafDied(self)
 	
 	def nextDay_Distribution(self):
 		extraBiomass = max(0, self.biomass - OPTIMAL_LEAF_BIOMASS)
@@ -699,11 +776,11 @@ class Leaf(PlantPart):
 		self.biomass -= biomassTakenByParent
 	
 	def nextDay_Growth(self):
-		#self.releaseAllUsedBlocks()
+		self.releaseAllUsedBlocks()
 		location, direction, side = self.parent.leafLocationAndDirections(self.numberOnInternode)
 		self.location = location
 		self.claimStartBlock()
-	
+
 	def nextDay_SignalPropagation(self):
 		pass
 
@@ -888,13 +965,15 @@ class Plant():
 	def __init__(self, x, y, z):
 		self.age = 0
 		self.location = (x, y, z)
+		self.numInternodesCreated = 0
+		self.seed = random.random()
+		random.seed(self.seed)
 		firstMeristem = Meristem(self, None, 0, self.location, FIRST_INTERNODE_FORWARD_DIRECTION, FIRST_INTERNODE_SIDE_DIRECTION, apical=True)
 		self.firstInternode = firstMeristem.buildInternode(firstOnPlant=True)
 		#firstRootMeristem = RootMeristem(self, None, apical=True)
 		#self.firstRootInternode = firstRootMeristem.buildRootPhytomer()
 		
 	def nextDay(self):
-		clearSpace()
 		self.firstInternode.nextDay()
 		#self.firstRootInternode.nextDay()
 		self.age += 1
@@ -915,26 +994,42 @@ class Plant():
 # -------------------------------------------------------------------------------------------
 def growPlant(outputFolder):
 	print 'starting...'
-	halfway = sizeOfSpace // 2
-	plant = Plant(halfway, halfway, halfway//2)
-	#plant.display()
-	
+	#drawSunDistribution(outputFolder)
 	daysPerPulse = 4
-	numPulses = 10
+	numPulses = 8
+	plants = []
+	numPlants = 10
+	for i in range(numPlants):
+		xLocation = 10 + random.randrange(80)
+		yLocation = 10 + random.randrange(80)
+		plants.append(Plant(xLocation, yLocation, 1))
+	#for plant in plants:
+	#	plant.display()
+	
+	day = 1
 	for i in range(numPulses):
 		for j in range(daysPerPulse):
-			plant.nextDay()
-		#print 'age', plant.age
-		#plant.display()
-		drawSpace(plant.age, outputFolder)
+			clearSpace()
+			for plant in plants:
+				plant.nextDay()
+				#plant.display()
+		drawSpace(day, outputFolder, drawSun=True)
+		day += daysPerPulse
 	
 	print 'done'
 	
-def drawSpace(age, outputFolder):
+def drawSpace(age, outputFolder, drawSun):
 	xValues = []
 	yValues = []
 	zValues = []
 	colors = []
+	if drawSun:
+		for i in range(sizeOfSpace):
+			for j in range(sizeOfSpace):
+				xValues.append(i)
+				yValues.append(j)
+				zValues.append(0)
+				colors.append(str(sun[(i,j)]))
 	for i in range(sizeOfSpace):
 		for j in range(sizeOfSpace):
 			for k in range (sizeOfSpace):
@@ -947,11 +1042,26 @@ def drawSpace(age, outputFolder):
 	filename = "Test tree growth age %s" % age
 	graphPNG3DScatter(xValues, yValues, zValues, colors, sizeOfSpace, "x", "y", "z", "tree growth", filename, outputFolder)
 	#print 'file %s written' % filename
-
+	
+def drawSunDistribution(outputFolder):
+	xValues = []
+	yValues = []
+	zValues = []
+	colors = []
+	for i in range(sizeOfSpace):
+		for j in range(sizeOfSpace):
+			xValues.append(i)
+			yValues.append(j)
+			zValues.append(sizeOfSpace-1)
+			colors.append(sun[(i,j)])
+	filename = "Sun coverage"
+	graphPNG3DScatter(xValues, yValues, zValues, colors, sizeOfSpace, "x", "y", "z", "sun coverage", filename, outputFolder)
 		
 def main():
-	outputFolder = setUpOutputFolder("/Users/cfkurtz/Documents/personal/terasology/generated images/")
-	growPlant(outputFolder)
+	iterations = 1
+	for i in range(iterations):
+		outputFolder = setUpOutputFolder("/Users/cfkurtz/Documents/personal/terasology/generated images/")
+		growPlant(outputFolder)
 	
 if __name__ == "__main__":
 	main()
