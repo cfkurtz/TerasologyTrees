@@ -173,7 +173,8 @@ class Meristem(PlantPart):
 		else:
 			location, forward, side = self.parent.locationAndDirectionsForAxillaryMeristem(self.numberOnInternode)
 		self.location = location
-		self.claimStartBlock()
+		if DRAW_MERISTEMS:
+			self.claimStartBlock()
 		
 	def calculateActivityLevel(self):
 		if not self.active:
@@ -435,17 +436,22 @@ class Internode(PlantPart):
 		self.endLocation = endPointOfAngledLine(self.location, self.length, 
 					angleInDegrees, self.randomSway, self.forward, self.parentBranchForward, self.side, aboveGround)
 		#print 'seeking from', self.endLocation
+		
+		# CFK PROBLEM: end will jump around from one day to the next
+		# is that okay?????? not sure
 		self.endLocation = seekBetterLocation(self.endLocation, self.root, INTERNODES_SEEK_RADIUS[self.root])
-		#print '..... found', self.endLocation
-		# now interpolate between the start and end positions to produce a rough line
-		locationsBetween = locationsBetweenTwoPoints(self.location, self.endLocation, self.length)
-		# place yourself in the locations
-		self.claimStartBlock()
-		self.claimSeriesOfBlocks(locationsBetween)
-		if self.width > 1:
-			for location in locationsBetween:
-				circleLocations = circleAroundPoint(location, self.width, self.forward, self.side, aboveGround)
-				self.claimSeriesOfBlocks(circleLocations)
+		
+		if (self.root and DRAW_ROOTS) or (not self.root and DRAW_STEMS):
+			#print '..... found', self.endLocation
+			# now interpolate between the start and end positions to produce a rough line
+			locationsBetween = locationsBetweenTwoPoints(self.location, self.endLocation, self.length)
+			# place yourself in the locations
+			self.claimStartBlock()
+			self.claimSeriesOfBlocks(locationsBetween)
+			if self.width > 1:
+				for location in locationsBetween:
+					circleLocations = circleAroundPoint(location, self.width, self.forward, self.side, aboveGround)
+					self.claimSeriesOfBlocks(circleLocations)
 			
 	def display(self, indentCounter=0):
 		if self.root:
@@ -495,13 +501,13 @@ class LeafCluster(PlantPart):
 		self.recalculateBlockPlacementsForChangeInSize()
 		
 	def recalculateBlockPlacementsForChangeInSize(self):
-		self.claimStartBlock()
 		if self.length > 1:
 			# draw "spine" of leaf cluster first
 			endLocationForSpine = endPointOfAngledLine(self.location, self.length, 
 						LEAF_CLUSTER_ANGLE_WITH_STEM, self.randomSway, self.forward, self.parent.forward, self.side)
 			leafClusterSpine = locationsBetweenTwoPoints(self.location, endLocationForSpine, self.length)
-			self.claimSeriesOfBlocks(leafClusterSpine)
+			if DRAW_LEAVES:
+				self.claimSeriesOfBlocks(leafClusterSpine)
 			# now draw two symmetrical "wings" to the sides
 			leafClusterLengthIndex = 0
 			leafClusterSides = []
@@ -522,10 +528,14 @@ class LeafCluster(PlantPart):
 						oneSidePiece = locationsBetweenTwoPoints(location, endLocationForLeafClusterSide, sideExtentConsideringBiomass)
 						leafClusterSides.extend(oneSidePiece)
 				leafClusterLengthIndex += 1
-			self.claimSeriesOfBlocks(leafClusterSides)
+				if DRAW_LEAVES:
+					self.claimStartBlock()
+					self.claimSeriesOfBlocks(leafClusterSides)
 		else:
 			endLocationForLeafCluster = displacementInDirection(self.location, self.forward, 1)
-			claimLocation(endLocationForLeafCluster, self)
+			if DRAW_LEAVES:
+				self.claimStartBlock()
+				claimLocation(endLocationForLeafCluster, self)
 
 	def nextDay_SignalPropagation(self):
 		pass
@@ -628,7 +638,7 @@ def growPlant(outputFolder):
 		drawWaterDistribution(outputFolder)
 		drawMineralsDistribution(outputFolder)
 	
-	numPlants = 1
+	numPlants = 3
 	print 'starting simulated growth with %s plant(s)...' % numPlants
 	daysPerPulse = 2
 	numPulses = 15
@@ -652,7 +662,7 @@ def growPlant(outputFolder):
 			for plant in plants:
 				plant.nextDay()
 				#plant.display()
-		drawSpace(day, outputFolder, drawSun=False)
+		drawSpace(day, outputFolder, drawSun=True)
 		day += daysPerPulse
 	
 	print 'done'

@@ -45,7 +45,7 @@ def graphPNG3DScatter(xValues, yValues, zValues, colors, SIZE_OF_SPACE_XY, xAxis
 	
 	try:
 		axes.scatter(npArrayX, npArrayY, npArrayZ, c=colors, marker='s', s=10, alpha=1.0, linewidth=1)
-		axes.grid(False)
+		axes.grid(True)
 		axes.set_xlabel(xAxisName, fontsize=8)
 		axes.set_ylabel(yAxisName, fontsize=8)
 		plt.suptitle(graphName)
