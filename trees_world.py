@@ -10,6 +10,9 @@ import numpy as np
 from trees_parameters import *
 from trees_graphics import *
 
+import matplotlib.cm as cm
+import matplotlib.colors as colors
+
 space = {}
 
 print 'generating sun coverage...'
@@ -36,14 +39,11 @@ print 'generating water distribution...'
 # generate underground water
 water = {}
 if PATCHY_WATER:
-	for i in range(SIZE_OF_SPACE_XY):
-		for j in range(SIZE_OF_SPACE_XY):
-			for k in range(GROUND_LEVEL+1):
-				water[(i,j,k)] = 0.0
 	for i in range(NUM_WATER_PATCHES):
 		i = random.randrange(SIZE_OF_SPACE_XY)
 		j = random.randrange(SIZE_OF_SPACE_XY)
 		k = random.randrange(GROUND_LEVEL+1)
+		# CFK FIX - could go out of range
 		for x in range(i-WATER_PATCH_RADIUS, i+WATER_PATCH_RADIUS):
 			for y in range(j-WATER_PATCH_RADIUS, j+WATER_PATCH_RADIUS):
 				for z in range(k-WATER_PATCH_RADIUS, k+WATER_PATCH_RADIUS):
@@ -51,16 +51,14 @@ if PATCHY_WATER:
 else:
 	for i in range(SIZE_OF_SPACE_XY):
 		for j in range(SIZE_OF_SPACE_XY):
-			for k in range(GROUND_LEVEL):
+			for k in range(GROUND_LEVEL+1):
 				water[(i,j,k)] = 1.0
 
+print 'generating mineral deposits...'
+		
 # generate underground minerals
 minerals = {}
 if PATCHY_MINERALS:
-	for i in range(SIZE_OF_SPACE_XY):
-		for j in range(SIZE_OF_SPACE_XY):
-			for k in range(GROUND_LEVEL+1):
-				minerals[(i,j,k)] = 0.0
 	for i in range(NUM_MINERAL_PATCHES):
 		i = random.randrange(SIZE_OF_SPACE_XY)
 		j = random.randrange(SIZE_OF_SPACE_XY)
@@ -79,7 +77,7 @@ else:
 def locationIsInUse(location):
 	return len(space[location]) > 0
 
-def blocksOccupiedAboveLocation(location, plantPart):
+def blocksOccupiedAboveLocation(location, treePart):
 	x = location[0]
 	y = location[1]
 	z = location[2]
@@ -87,19 +85,19 @@ def blocksOccupiedAboveLocation(location, plantPart):
 	zAbove = min(SIZE_OF_SPACE_XY-1, z+1)
 	while zAbove <= SIZE_OF_SPACE_XY-1:
 		locationAbove = (x, y, zAbove)
-		if space.has_key(locationAbove) and space[locationAbove] and not (space[locationAbove][0] is plantPart):
+		if space.has_key(locationAbove) and space[locationAbove] and not (space[locationAbove][0] is treePart):
 			result += 1
 		zAbove += 1
 	return result
 
-def claimLocation(location, plantPart):
-	# space use is competitive: any newcomers push others aside as the growth signal passes through the plant
-	# keep a list rather than a pointer, because when one plant part releases the space
+def claimLocation(location, treePart):
+	# space use is competitive: any newcomers push others aside as the growth signal passes through the tree
+	# keep a list rather than a pointer, because when one tree part releases the space
 	# the next in line can have it
 	# so the list is sort of a "waiting list" for the space
 	if not space.has_key(location):
 		space[location] = []
-	space[location].insert(0, plantPart)
+	space[location].insert(0, treePart)
 	
 def seekBetterLocation(location, root, seekRadius):
 	x = location[0]
@@ -111,13 +109,19 @@ def seekBetterLocation(location, root, seekRadius):
 	stopY = max(0, min(SIZE_OF_SPACE_XY-1, y+seekRadius))
 	bestLocation = None
 	if root:
-		bestWaterAndMinerals = water[location] + minerals[location]
+		if water.has_key(location) and minerals.has_key(location):
+			bestWaterAndMinerals = water[location] + minerals[location]
+		else:
+			bestWaterAndMinerals = 0
 		startZ = max(0, min(GROUND_LEVEL, z-seekRadius))
 		stopZ = max(0, min(GROUND_LEVEL, z+seekRadius))
 		for i in range(startX, stopX):
 			for j in range(startY, stopY):
 				for k in range(startZ, stopZ):
-					waterAndMinerals = water[(i,j,k)] + minerals[(i,j,k)]
+					if water.has_key((i,j,k)) and minerals.has_key((i,j,k)):
+						waterAndMinerals = water[(i,j,k)] + minerals[(i,j,k)]
+					else:
+						waterAndMinerals = 0
 					if waterAndMinerals > bestWaterAndMinerals:
 						bestWaterAndMinerals = waterAndMinerals
 						bestLocation = (i,j,k)
@@ -134,9 +138,33 @@ def seekBetterLocation(location, root, seekRadius):
 	else:
 		return location
 	
-def releaseLocation(location, plantPart):
-	if plantPart in space[location]:
-		space[location].remove(plantPart)
+def waterOrMineralsInRegion(waterOrMinerals, location, radius):
+	x = location[0]
+	y = location[1]
+	z = location[2]
+	startX = max(0, min(SIZE_OF_SPACE_XY-1, x-radius))
+	stopX = max(0, min(SIZE_OF_SPACE_XY-1, x+radius))
+	startY = max(0, min(SIZE_OF_SPACE_XY-1, y-radius))
+	stopY = max(0, min(SIZE_OF_SPACE_XY-1, y+radius))
+	startZ = max(0, min(GROUND_LEVEL, z-radius))
+	stopZ = max(0, min(GROUND_LEVEL, z+radius))
+	available = 0
+	locationsConsidered = []
+	if waterOrMinerals == "water":
+		resource = water
+	else:
+		resource = minerals
+	for i in range(startX, stopX):
+		for j in range(startY, stopY):
+			for k in range(startZ, stopZ):
+				if resource.has_key((i,j,k)):
+					available += resource[(i,j,k)]
+				locationsConsidered.append((i,j,k))
+	return available, locationsConsidered
+	
+def releaseLocation(location, treePart):
+	if treePart in space[location]:
+		space[location].remove(treePart)
 	
 def clearSpace():
 	for i in range(SIZE_OF_SPACE_XY):
@@ -147,101 +175,141 @@ def clearSpace():
 def colorForLocation(location):
 	if space.has_key(location):
 		if space.has_key(location) and space[location]:
-			plantPart = space[location][0]
-			if plantPart:
-				name = plantPart.__class__.__name__
+			treePart = space[location][0]
+			if treePart:
+				name = treePart.__class__.__name__
 				if name == "Meristem":
-					if plantPart.alive:
-						return COLOR_MERISTEM[plantPart.root]
+					if treePart.alive:
+						color = COLOR_MERISTEM[treePart.root]
 					else:
-						return COLOR_MERISTEM_DEAD[plantPart.root]
+						color = COLOR_MERISTEM_DEAD[treePart.root]
 				elif name == "Internode":
-					if plantPart.alive:
-						if plantPart.woody:
-							return COLOR_INTERNODE_WOODY
+					if treePart.alive:
+						if treePart.woody:
+							color = COLOR_INTERNODE_WOODY
 						else:
-							return COLOR_INTERNODE_NONWOODY[plantPart.root]
+							color = COLOR_INTERNODE_NONWOODY[treePart.root]
 					else:
-						return COLOR_INTERNODE_DEAD[plantPart.root]
+						color = COLOR_INTERNODE_DEAD[treePart.root]
 				elif name == "LeafCluster":
-					if plantPart.alive:
-						return COLOR_LEAF_CLUSTER
+					if treePart.alive:
+						color = COLOR_LEAF_CLUSTER
 					else:
-						return COLOR_LEAF_CLUSTER_DEAD
+						color = COLOR_LEAF_CLUSTER_DEAD
+				return colors.colorConverter.to_rgba(color)
 				# cfk add others later
 	return None
 
-def drawSpace(age, outputFolder, drawSun):
+def drawSpace(age, outputFolder, drawTrees=True, drawSun=False, drawWater=False, drawMinerals=False):
+	allXValues = []
+	allYValues = []
+	allZValues = []
+	allColors = []
+	if drawSun:
+		xValues, yValues, zValues, colors = sunBlocksToGraph()
+		allXValues.extend(xValues)
+		allYValues.extend(yValues)
+		allZValues.extend(zValues)
+		allColors.extend(colors)
+	if drawWater:
+		xValues, yValues, zValues, colors = waterBlocksToGraph()
+		allXValues.extend(xValues)
+		allYValues.extend(yValues)
+		allZValues.extend(zValues)
+		allColors.extend(colors)
+	if drawMinerals:
+		xValues, yValues, zValues, colors = mineralBlocksToGraph()
+		allXValues.extend(xValues)
+		allYValues.extend(yValues)
+		allZValues.extend(zValues)
+		allColors.extend(colors)
+	if drawTrees:
+		xValues = []
+		yValues = []
+		zValues = []
+		colors = []
+		for k in range (SIZE_OF_SPACE_Z): # order by height
+			for i in range(SIZE_OF_SPACE_XY):
+				for j in range(SIZE_OF_SPACE_XY):
+					color = colorForLocation((i,j,k))
+					if color:
+						xValues.append(i)
+						yValues.append(j)
+						zValues.append(k)
+						colors.append(color)
+		allXValues.extend(xValues)
+		allYValues.extend(yValues)
+		allZValues.extend(zValues)
+		allColors.extend(colors)
+	#print allColors
+	filename = "Tree growth age %s" % age
+	graphPNG3DScatter(allXValues, allYValues, allZValues, allColors, SIZE_OF_SPACE_XY, "x", "y", "z", "tree growth", filename, outputFolder)
+	
+def drawSunDistribution(outputFolder):
+	xValues, yValues, zValues, colors = sunBlocksToGraph()
+	graphPNG3DScatter(xValues, yValues, zValues, colors, SIZE_OF_SPACE_XY, "x", "y", "z", "sun coverage", "Sun coverage", outputFolder)
+	print 'sun coverage graphed'
+	
+def sunBlocksToGraph():
 	xValues = []
 	yValues = []
 	zValues = []
 	colors = []
-	if drawSun:
-		for i in range(SIZE_OF_SPACE_XY):
-			for j in range(SIZE_OF_SPACE_XY):
+	autumn = cm.get_cmap("autumn")
+	for i in range(SIZE_OF_SPACE_XY):
+		for j in range(SIZE_OF_SPACE_XY):
+			if sun[(i,j)] > 0:
 				xValues.append(i)
 				yValues.append(j)
 				zValues.append(0)
-				colors.append(str(sun[(i,j)]))
-	for i in range(SIZE_OF_SPACE_XY):
-		for j in range(SIZE_OF_SPACE_XY):
-			for k in range (SIZE_OF_SPACE_Z):
-				color = colorForLocation((i,j,k))
-				if color:
-					xValues.append(i)
-					yValues.append(j)
-					zValues.append(k)
-					colors.append(color)
-	filename = "Test tree growth age %s" % age
-	graphPNG3DScatter(xValues, yValues, zValues, colors, SIZE_OF_SPACE_XY, "x", "y", "z", "tree growth", filename, outputFolder)
-	#print 'file %s written' % filename
-	
-def drawSunDistribution(outputFolder):
-	xValues = []
-	yValues = []
-	zValues = []
-	colors = []
-	for i in range(SIZE_OF_SPACE_XY):
-		for j in range(SIZE_OF_SPACE_XY):
-			xValues.append(i)
-			yValues.append(j)
-			zValues.append(SIZE_OF_SPACE_XY-1)
-			colors.append(sun[(i,j)])
-	filename = "Sun coverage"
-	graphPNG3DScatter(xValues, yValues, zValues, colors, SIZE_OF_SPACE_XY, "x", "y", "z", "sun coverage", filename, outputFolder)
-	print 'sun coverage graphed'
+				color = autumn(sun[(i,j)])
+				colors.append(color)
+	return xValues, yValues, zValues, colors
 		
 def drawWaterDistribution(outputFolder):
+	xValues, yValues, zValues, colors = waterBlocksToGraph()
+	graphPNG3DScatter(xValues, yValues, zValues, colors, 
+					SIZE_OF_SPACE_XY, "x", "y", "z", "water distribution", "Water distribution", outputFolder, drawLines=False)
+	print 'water distribution graphed'
+	
+def waterBlocksToGraph():
 	xValues = []
 	yValues = []
 	zValues = []
 	colors = []
-	for i in range(SIZE_OF_SPACE_XY):
-		for j in range(SIZE_OF_SPACE_XY):
-			for k in range(GROUND_LEVEL):
-				if water[(i,j,k)] > 0:
+	blues = cm.get_cmap("Blues")
+	for k in range(GROUND_LEVEL):
+		for i in range(SIZE_OF_SPACE_XY):
+			for j in range(SIZE_OF_SPACE_XY):
+				if water.has_key((i,j,k)) and water[(i,j,k)] > 0:
 					xValues.append(i)
 					yValues.append(j)
 					zValues.append(k)
-					colors.append(str(water[(i,j,k)]))
-	filename = "Water distribution"
-	graphPNG3DScatter(xValues, yValues, zValues, colors, SIZE_OF_SPACE_XY, "x", "y", "z", "water distribution", filename, outputFolder)
-	print 'water distribution graphed'
+					color = blues(water[(i,j,k)])
+					colors.append(color)
+	return xValues, yValues, zValues, colors
 
 def drawMineralsDistribution(outputFolder):
+	xValues, yValues, zValues, colors = mineralBlocksToGraph()
+	graphPNG3DScatter(xValues, yValues, zValues, colors, 
+					SIZE_OF_SPACE_XY, "x", "y", "z", "mineral deposits", "Mineral deposits", outputFolder, drawLines=False)
+	print 'mineral deposits graphed'
+	
+def mineralBlocksToGraph():
 	xValues = []
 	yValues = []
 	zValues = []
 	colors = []
-	for i in range(SIZE_OF_SPACE_XY):
-		for j in range(SIZE_OF_SPACE_XY):
-			for k in range(GROUND_LEVEL):
-				if minerals[(i,j,k)] > 0:
+	copper = cm.get_cmap("copper")
+	for k in range(GROUND_LEVEL):
+		for i in range(SIZE_OF_SPACE_XY):
+			for j in range(SIZE_OF_SPACE_XY):
+				if minerals.has_key((i,j,k)) and minerals[(i,j,k)] > 0:
 					xValues.append(i)
 					yValues.append(j)
 					zValues.append(k)
-					colors.append(str(minerals[(i,j,k)]))
-	filename = "Mineral deposits"
-	graphPNG3DScatter(xValues, yValues, zValues, colors, SIZE_OF_SPACE_XY, "x", "y", "z", "mineral deposits", filename, outputFolder)
-	print 'mineral deposits graphed'
+					color = copper(minerals[(i,j,k)])
+					colors.append(color)
+	return xValues, yValues, zValues, colors
+
 

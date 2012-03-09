@@ -20,7 +20,7 @@ def cleanTextForFileName(fileName):
 	result = result.replace("  ", " ")
 	return result
 
-def graphPNG3DScatter(xValues, yValues, zValues, colors, SIZE_OF_SPACE_XY, xAxisName, yAxisName, zAxisName, graphName, pngFileName, pngFilePath):
+def graphPNG3DScatter(xValues, yValues, zValues, colors, SIZE_OF_SPACE_XY, xAxisName, yAxisName, zAxisName, graphName, pngFileName, pngFilePath, drawLines=True):
 	
 	#print xValues, yValues, zValues
 	
@@ -41,10 +41,18 @@ def graphPNG3DScatter(xValues, yValues, zValues, colors, SIZE_OF_SPACE_XY, xAxis
 	axes.set_ylim(lowest, highest)
 	axes.set_ylim3d(lowest, highest)
 	axes.set_zlim3d(lowest, highest*2) # twice as tall 
-	axes.view_init(20, 100)
+	axes.view_init(20, 120)
+	
+	if drawLines:
+		lineWidth = 1
+	else:
+		lineWidth = 0
 	
 	try:
-		axes.scatter(npArrayX, npArrayY, npArrayZ, c=colors, marker='s', s=10, alpha=1.0, linewidth=1)
+		axes.scatter(npArrayX, npArrayY, npArrayZ, c=colors, marker='s', s=10, alpha=1.0, linewidth=lineWidth)
+
+		#axes.bar([0], [GROUND_LEVEL+1], [SIZE_OF_SPACE_XY], color='b', alpha=0.5)
+	
 		axes.grid(True)
 		axes.set_xlabel(xAxisName, fontsize=8)
 		axes.set_ylabel(yAxisName, fontsize=8)
@@ -82,7 +90,7 @@ def boundLocation(location, aboveGround):
 	if aboveGround:
 		newZ = max(GROUND_LEVEL+1, min(SIZE_OF_SPACE_Z-1, newZ))
 	else:
-		newZ = max(0, min(GROUND_LEVEL, newZ))
+		newZ = max(0, min(GROUND_LEVEL + ROOTS_CAN_GROW_THIS_MANY_BLOCKS_ABOVE_GROUND, newZ))
 	return (newX, newY, newZ)
 
 def displacementInDirection(location, direction, amount, aboveGround=True):
@@ -235,3 +243,8 @@ def endPointOfAngledLine(location, length, angleInDegrees, swayInDegrees, forwar
 
 	endLocation = boundLocation(endLocation, aboveGround)
 	return endLocation
+
+
+
+
+

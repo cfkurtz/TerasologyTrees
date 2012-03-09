@@ -22,26 +22,30 @@ from trees_world import *
 # DONE add apical dominance
 # DONE make absolute limit on how many internodes can be created - to prevent params blowing up
 # DONE use s curve for photosynthesis
-# DONE??? put random number on seed unique to plant
+# DONE??? put random number on seed unique to tree
 # FIXED problem: gaps
 # DONE add internode width
 # DONE add leafCluster petiole and leafCluster shape
 # DONE add leafCluster angle with stem
-
-# add limits on parameters (in comments)
-# add seeking behavior for internodes (stem and root)
+# DONE put in root growth
+# DONE do water and nutrient uptake - water and nutrient grids, like sun grid
+# DONE add seeking behavior for internodes (stem and root)
 
 # put in flower and fruit clusters
-# put in root growth
-# do water and nutrient uptake - water and nutrient grids, like sun grid
+
+# add limits on parameters (in comments)
+# do several parameter sets
+# make code more clear with many comments
+# write comment on board
+# upload to git repository?
 
 # NOT DOING think about collision avoidance and growth around occupied blocks
 
 # -------------------------------------------------------------------------------------------
-class PlantPart():
+class TreePart():
 # -------------------------------------------------------------------------------------------
-	def __init__(self, plant, parent, location, forward, side, biomass=0, water=0, minerals=0):
-		self.plant = plant
+	def __init__(self, tree, parent, location, forward, side, biomass=0, water=0, minerals=0):
+		self.tree = tree
 		self.parent = parent
 		self.age = 0
 		self.alive = True
@@ -84,36 +88,18 @@ class PlantPart():
 				self.blocks.append(location)
 				claimLocation(location, self)
 		
-	def calculatePhotosynthesis(self, location, optimalAmount):
-		# used by leafCluster and internode so to avoid duplication, keep here
-		# 1. the more sun where you are, the more you can get at
-		sunProportion = sun[(location[0], location[1])]
-		# 2. the more things above you the less light you get
-		numBlocksShadingMe = blocksOccupiedAboveLocation(location, self)
-		if numBlocksShadingMe > 0:
-			shadeProportion = max(0.0, min(1.0, 1.0 - 1.0 * numBlocksShadingMe / SHADE_TOLERANCE))
-		else:
-			shadeProportion = 1.0
-		# 3. these effects multiply
-		combinedEffectsProportion = sunProportion * shadeProportion
-		# 5. photosynthesis depends on biomass accumulated (water and nutrients later)
-		#print 'sunProportion', sunProportion, 'numBlocksShadingMe', numBlocksShadingMe, 'shadeProportion', shadeProportion, 'biomass', self.biomass 
-		photosynthesisProportion = combinedEffectsProportion * (1.0 - math.exp(-0.65 * self.biomass))
-		# 5. finally we end up with a proporton of the optimal
-		newBiomass = max(0.0, photosynthesisProportion * optimalAmount) 
-		return newBiomass
-		
 # -------------------------------------------------------------------------------------------
-class Meristem(PlantPart):
+class Meristem(TreePart):
 # -------------------------------------------------------------------------------------------
-	def __init__(self, plant, parent, root, numberOnInternode, location, forward, side, apical=False, biomass=0, water=0, minerals=0):
-		PlantPart.__init__(self, plant, parent, location, forward, side, biomass=START_MERISTEM_BIOMASS[root], water=0, minerals=0)
+	def __init__(self, tree, parent, root, numberOnInternode, location, forward, side, apical=False, biomass=0, water=0, minerals=0):
+		TreePart.__init__(self, tree, parent, location, forward, side, 
+						biomass=START_MERISTEM_BIOMASS[root], water=START_MERISTEM_WATER[root], minerals=START_MERISTEM_MINERALS[root])
 		self.apical = apical
 		self.root = root
 		self.numberOnInternode = numberOnInternode
 		self.active = False
 		
-	def buildInternode(self, firstOnPlant=False):
+	def buildInternode(self, firstOnTree=False):
 		if self.apical:
 			newSide = rotateAround(self.forward, self.side, 1)
 			if self.parent:
@@ -130,14 +116,14 @@ class Meristem(PlantPart):
 			else:
 				if self.root:
 					parentBranchForward = "down"
-					newSide = self.plant.firstRootInternodeSideDirection
+					newSide = self.tree.firstRootInternodeSideDirection
 				else:
 					parentBranchForward = "up"
-					newSide = self.plant.firstInternodeSideDirection
-		firstOnBranch = firstOnPlant or not self.apical
+					newSide = self.tree.firstInternodeSideDirection
+		firstOnBranch = firstOnTree or not self.apical
 		
-		newInternode = Internode(self.plant, self.parent, self.root, self.location, self.forward, newSide, 
-								firstOnPlant=firstOnPlant, firstOnBranch=firstOnBranch, parentBranchForward=parentBranchForward,
+		newInternode = Internode(self.tree, self.parent, self.root, self.location, self.forward, newSide, 
+								firstOnTree=firstOnTree, firstOnBranch=firstOnBranch, parentBranchForward=parentBranchForward,
 								iAmABranchOffMyParent=not self.apical)
 		if self.parent:
 			if self.apical:
@@ -150,8 +136,11 @@ class Meristem(PlantPart):
 		pass
 	
 	def nextDay_Consumption(self):
-		if self.biomass - BIOMASS_USED_BY_MERISTEM_PER_DAY[self.root] < MERISTEM_DIES_IF_BIOMASS_GOES_BELOW[self.root]:
+		if self.biomass - BIOMASS_USED_BY_MERISTEM_PER_DAY[self.root] < MERISTEM_DIES_IF_BIOMASS_GOES_BELOW[self.root] or \
+			self.water - WATER_USED_BY_MERISTEM_PER_DAY[self.root] < MERISTEM_DIES_IF_WATER_GOES_BELOW[self.root] or \
+			self.minerals - MINERALS_USED_BY_MERISTEM_PER_DAY[self.root] < MERISTEM_DIES_IF_MINERALS_GOES_BELOW[self.root]:
 			self.die()
+			#print 'meristem died', self.biomass, self.water, self.minerals, self.root
 		else:
 			if self.apical:
 				self.active = True
@@ -159,13 +148,17 @@ class Meristem(PlantPart):
 				self.calculateActivityLevel()
 			if self.active:
 				self.biomass -= BIOMASS_USED_BY_MERISTEM_PER_DAY[self.root]
+				self.water -= WATER_USED_BY_MERISTEM_PER_DAY[self.root]
+				self.minerals -= MINERALS_USED_BY_MERISTEM_PER_DAY[self.root]
 				
 	def nextDay_Distribution(self):
 		pass
 	
 	def nextDay_Growth(self):
 		if self.active:
-			if self.biomass >= BIOMASS_TO_MAKE_ONE_PHYTOMER[self.root]:
+			if self.biomass >= BIOMASS_TO_MAKE_ONE_PHYTOMER[self.root] and \
+				self.water >= WATER_TO_MAKE_ONE_PHYTOMER[self.root] and \
+				self.minerals >= MINERALS_TO_MAKE_ONE_PHYTOMER[self.root]:
 				self.buildInternode()
 				self.parent.removeMeristemThatMadeInternode(self)
 		if self.apical:
@@ -178,7 +171,7 @@ class Meristem(PlantPart):
 		
 	def calculateActivityLevel(self):
 		if not self.active:
-			if self.plant.numInternodesCreated <= MAX_NUM_INTERNODES_ON_PLANT_EVER[self.root]:
+			if self.tree.numInternodesCreated <= MAX_NUM_INTERNODES_ON_TREE_EVER[self.root]:
 				distance = self.distanceOfParentFromBranchApex()
 				if distance > 0:
 					probability = BRANCHING_PROBABILITY[self.root] * distance / APICAL_DOMINANCE_EXTENDS_FOR[self.root]
@@ -203,41 +196,56 @@ class Meristem(PlantPart):
 	def acceptBiomass(self, biomassOffered):
 		biomassINeed = max(0, (BIOMASS_TO_MAKE_ONE_PHYTOMER[self.root] + BIOMASS_USED_BY_MERISTEM_PER_DAY[self.root]) - self.biomass)
 		biomassIWillAccept = min(biomassOffered, biomassINeed)
-		#print 'biomassINeed', biomassINeed, 'biomassIWillAccept', biomassIWillAccept, 'biomass', self.biomass
-		#print 'meristem took %s biomass from internode' % biomassIWillAccept
 		self.biomass += biomassIWillAccept
 		return biomassIWillAccept
 	
-	def display(self, indentCounter=0):
+	def acceptWater(self, waterOffered):
+		waterINeed = max(0, (WATER_TO_MAKE_ONE_PHYTOMER[self.root] + WATER_USED_BY_MERISTEM_PER_DAY[self.root]) - self.water)
+		waterIWillAccept = min(waterOffered, waterINeed)
+		self.water += waterIWillAccept
+		return waterIWillAccept
+	
+	def acceptMinerals(self, mineralsOffered):
+		mineralsINeed = max(0, (MINERALS_TO_MAKE_ONE_PHYTOMER[self.root] + MINERALS_USED_BY_MERISTEM_PER_DAY[self.root]) - self.minerals)
+		mineralsIWillAccept = min(mineralsOffered, mineralsINeed)
+		self.minerals += mineralsIWillAccept
+		return mineralsIWillAccept
+	
+	def describe(self, outputFile, indentCounter=0):
 		if self.root:
-			rootOrNot = 'root'
+			rootOrNot = ' root '
 		else:
 			rootOrNot = ''
 		if self.apical:
-			print INDENT * indentCounter, rootOrNot, 'apical meristem: biomass', self.biomass, "location", self.location, "active", self.active, "forward", self.forward, "side", self.side
+			apicalOrAxillary = ' apical '
 		else:
-			print INDENT * indentCounter, rootOrNot, 'axillary meristem: biomass', self.biomass, "location", self.location, "active", self.active,"forward", self.forward, "side", self.side
+			apicalOrAxillary = ' axillary '
+		outputFile.write(INDENT * indentCounter + rootOrNot + apicalOrAxillary + ' meristem: ' + ' alive ' + str(self.alive) + \
+			' biomass ' + str(self.biomass) + " water " + str(self.water) + " minerals " + str(self.minerals) + \
+			" location " + str(self.location) + " active " + str(self.active) + " forward " + self.forward + " side " + self.side)
+		outputFile.write("\n")
 		
 # -------------------------------------------------------------------------------------------
-class Internode(PlantPart):
+class Internode(TreePart):
 # -------------------------------------------------------------------------------------------
-	def __init__(self, plant, parent, root, location, forward, side, firstOnPlant, firstOnBranch, parentBranchForward, iAmABranchOffMyParent):
-		PlantPart.__init__(self, plant, parent, location, forward, side, biomass=START_INTERNODE_BIOMASS[root], water=0, minerals=0)
+	def __init__(self, tree, parent, root, location, forward, side, firstOnTree, firstOnBranch, parentBranchForward, iAmABranchOffMyParent):
+		TreePart.__init__(self, tree, parent, location, forward, side, 
+						biomass=START_INTERNODE_BIOMASS[root], water=START_INTERNODE_WATER[root], minerals=START_INTERNODE_MINERALS[root])
 		self.root = root
 		self.child = None
 		self.branches = []
-		self.firstOnPlant = firstOnPlant
+		self.firstOnTree = firstOnTree
 		self.firstOnBranch = firstOnBranch
 		self.parentBranchForward = parentBranchForward
 		self.iAmABranchOffMyParent = iAmABranchOffMyParent
-		self.plant.numInternodesCreated += 1
+		self.tree.numInternodesCreated += 1
 		self.randomSway = random.randrange(RANDOM_INTERNODE_SWAY[self.root]) - RANDOM_INTERNODE_SWAY[self.root] // 2
 		
-		if not self.root:
-			self.woody = (INTERNODES_TURN_WOODY_AFTER_THIS_MANY_DAYS == 0)
+		self.woody = (INTERNODES_TURN_WOODY_AFTER_THIS_MANY_DAYS[self.root] == 0)
+		if self.firstOnTree:
+			self.length = FIRST_INTERNODE_LENGTH_AT_CREATION[self.root]
 		else:
-			self.woody = False
-		self.length = INTERNODE_LENGTH_AT_CREATION[self.root]
+			self.length = INTERNODE_LENGTH_AT_CREATION[self.root]
 		self.width = INTERNODE_WIDTH_AT_CREATION[self.root]
 		self.recalculateBlockPlacementsForChangeInLength()
 		
@@ -247,25 +255,27 @@ class Internode(PlantPart):
 		
 	def buildMeristems(self):
 		location = self.locationForApicalMeristem()
-		self.apicalMeristem = Meristem(self.plant, self, self.root, 0, location, self.forward, self.side, apical=True)
+		self.apicalMeristem = Meristem(self.tree, self, self.root, 0, location, self.forward, self.side, apical=True)
 		self.axillaryMeristems = []
 		for i in range(AXILLARY_MERISTEMS_PER_INTERNODE[self.root]):
 			location, forward, side = self.locationAndDirectionsForAxillaryMeristem(i)
-			newAxillaryMeristem = Meristem(self.plant, self, self.root, i, location, forward, side, apical=False)
+			newAxillaryMeristem = Meristem(self.tree, self, self.root, i, location, forward, side, apical=False)
 			self.axillaryMeristems.append(newAxillaryMeristem)
 		
 	def buildLeafClusters(self):
 		self.leafClusters = []
 		for i in range(AXILLARY_MERISTEMS_PER_INTERNODE[self.root]):
 			location, forward, side = self.locationAndDirectionsForLeafCluster(i)
-			newLeafCluster = LeafCluster(self.plant, self, i, location, forward, side)
+			newLeafCluster = LeafCluster(self.tree, self, i, location, forward, side)
 			self.leafClusters.append(newLeafCluster)
 			
 	def locationForApicalMeristem(self):
-		locationOneFurther = displacementInDirection(self.endLocation, self.forward, 1)
+		aboveGround = not self.root
+		locationOneFurther = displacementInDirection(self.endLocation, self.forward, 1, aboveGround)
 		return locationOneFurther
 	
 	def locationAndDirectionsForAxillaryMeristem(self, meristemNumber):
+		aboveGround = not self.root
 		if AXILLARY_MERISTEMS_PER_INTERNODE[self.root] == 1:
 			meristemForward = self.side
 		elif AXILLARY_MERISTEMS_PER_INTERNODE[self.root] == 2:
@@ -278,7 +288,7 @@ class Internode(PlantPart):
 				meristemForward = self.side
 			else:
 				meristemForward = rotateAround(self.forward, self.side, meristemNumber)
-		location = displacementInDirection(self.endLocation, meristemForward, self.width//2)
+		location = displacementInDirection(self.endLocation, meristemForward, self.width//2, aboveGround)
 		meristemSide = self.forward
 		return location, meristemForward, meristemSide
 		
@@ -305,7 +315,8 @@ class Internode(PlantPart):
 		return location, leafClusterForward, leafClusterSide
 	
 	def locationForChildInternode(self):
-		locationOneFurther = displacementInDirection(self.endLocation, self.forward, 1)
+		aboveGround = not self.root
+		locationOneFurther = displacementInDirection(self.endLocation, self.forward, 1, aboveGround)
 		return locationOneFurther
 		
 	def addChildInternode(self, internode):
@@ -315,12 +326,17 @@ class Internode(PlantPart):
 		self.branches.append(internode)
 				
 	def acceptBiomass(self, biomassOffered):
-		# the internode, because it is a piping system, takes biomass it doesn't need
-		# so it can pass it on
-		#print self.age, 'biomass before accepting', self.biomass
+		# the internode, because it is a piping system, takes biomass it doesn't need so it can pass it on
 		self.biomass += biomassOffered
-		#print self.age, 'biomass after accepting', self.biomass
 		return biomassOffered
+	
+	def acceptWater(self, waterOffered):
+		self.water += waterOffered
+		return waterOffered
+	
+	def acceptMinerals(self, mineralsOffered):
+		self.minerals += mineralsOffered
+		return mineralsOffered
 	
 	def removeMeristemThatMadeInternode(self, meristem):
 		if meristem.apical:
@@ -329,32 +345,59 @@ class Internode(PlantPart):
 			self.axillaryMeristems.remove(meristem)
 		
 	def nextDay_Uptake(self):
-		#print self.age, 'biomass before uptake', self.biomass
 		if (not self.root) and (not self.woody):
-			newBiomass = self.calculatePhotosynthesis(self.endLocation, BIOMASS_MADE_BY_FULL_SIZED_NON_WOODY_INTERNODE_PER_DAY_WITH_FULL_SUN)
+			sunProportion = sun[(self.endLocation[0], self.endLocation[1])]
+			numBlocksShadingMe = blocksOccupiedAboveLocation(self.endLocation, self)
+			if numBlocksShadingMe > 0:
+				shadeProportion = max(0.0, min(1.0, 1.0 - 1.0 * numBlocksShadingMe / SHADE_TOLERANCE))
+			else:
+				shadeProportion = 1.0
+			waterProportion = self.water / OPTIMAL_INTERNODE_WATER[self.root]
+			mineralsProportion = self.minerals / OPTIMAL_INTERNODE_MINERALS[self.root]
+			biomassProportion = self.biomass / OPTIMAL_INTERNODE_BIOMASS[self.root]
+			combinedEffectsProportion = sunProportion * shadeProportion * waterProportion * mineralsProportion * biomassProportion
+			newBiomass =  max(0.0, OPTIMAL_INTERNODE_PHOTOSYNTHATE * (1.0 - math.exp(-0.65 * combinedEffectsProportion)))
 			self.biomass += newBiomass
 		if self.root:
-			pass
-			# figure out how much water and minerals you need first
-			# need params for optimal and start water and minerals for all plant parts ??? i guess so
-			#newWater = ROOT_TAKES_PROPORTION_OF_WATER_IN_SPOT * water[self.endLocation]
-			#water[self.endLocation] -= newWater
-			#self.water += newWater
-			#newMinerals = ROOT_TAKES_PROPORTION_OF_MINERALS_IN_SPOT * minerals[self.endLocation]
-			#minerals[self.endLocation] -= newMinerals
-#		#print self.age, 'biomass after uptake', self.biomass
+			availableWater, locationsConsidered = waterOrMineralsInRegion("water", self.endLocation, ROOT_WATER_EXTRACTION_RADIUS)
+			if availableWater > 0:
+				for location in locationsConsidered:
+					if water.has_key(location):
+						waterAtLocation = water[location]
+					else:
+						waterAtLocation = 0
+					if waterAtLocation > 0:
+						waterExtractedFromLocation = ROOT_WATER_EXTRACTION_EFFICIENCY * waterAtLocation
+						self.water += waterExtractedFromLocation
+						water[location] -= waterExtractedFromLocation
+			availableMinerals, locationsConsidered = waterOrMineralsInRegion("minerals", self.endLocation, ROOT_MINERAL_EXTRACTION_RADIUS)
+			if availableMinerals > 0:
+				for location in locationsConsidered:
+					if minerals.has_key(location):
+						mineralsAtLocation = minerals[location]
+						if mineralsAtLocation > 0:
+							mineralsExtractedFromLocation = ROOT_MINERAL_EXTRACTION_EFFICIENCY * mineralsAtLocation
+							self.minerals += mineralsExtractedFromLocation
+							minerals[location] -= mineralsExtractedFromLocation
 	
 	def nextDay_Consumption(self):
-		#print self.age, 'biomass before consumption', self.biomass
-		if self.woody: #internodes don't use any biomass up once they have stopped photosynthesizing
+		if self.woody:
 			biomassINeedToUseToday = 0
+			waterINeedToUseToday = 0
+			mineralsINeedToUseToday = 0
 		else:
 			biomassINeedToUseToday = BIOMASS_USED_BY_INTERNODE_PER_DAY[self.root]
-		if self.biomass - biomassINeedToUseToday < INTERNODE_DIES_IF_BIOMASS_GOES_BELOW[self.root]:
+			waterINeedToUseToday = WATER_USED_BY_INTERNODE_PER_DAY[self.root]
+			mineralsINeedToUseToday = MINERALS_USED_BY_INTERNODE_PER_DAY[self.root]
+		if self.biomass - biomassINeedToUseToday < INTERNODE_DIES_IF_BIOMASS_GOES_BELOW[self.root] or \
+				self.water - waterINeedToUseToday < INTERNODE_DIES_IF_WATER_GOES_BELOW[self.root] or \
+				self.minerals - mineralsINeedToUseToday < INTERNODE_DIES_IF_MINERALS_GOES_BELOW[self.root]:
 			self.die()
+			#print 'internode died', self.biomass, self.water, self.minerals, self.root
 		else:
 			self.biomass -= biomassINeedToUseToday
-		#print self.age, 'biomass after consumption', self.biomass
+			self.water -= waterINeedToUseToday
+			self.minerals -= mineralsINeedToUseToday
 	
 	def die(self):
 		sendDieSignalTo = []
@@ -369,47 +412,69 @@ class Internode(PlantPart):
 				sendTo.die()
 	
 	def nextDay_Distribution(self):
-		#print self.age, 'biomass before distribution', self.biomass
-		supplicants = []
-		for name in BIOMASS_DISTRIBUTION_ORDER[self.root]:
-			if name == "leafClusters":
+		parts = self.gatherDistributees(BIOMASS_DISTRIBUTION_ORDER[self.root])
+		for part in parts:
+			if part:
+				extra = max(0, self.biomass - OPTIMAL_INTERNODE_BIOMASS[self.root] - BIOMASS_USED_BY_INTERNODE_PER_DAY[self.root])
+				if extra > 0:
+					toBeGivenAway = extra * BIOMASS_DISTRIBUTION_SPREAD_PERCENT[self.root] / 100.0
+					taken = part.acceptBiomass(toBeGivenAway)
+					self.biomass -= taken
+		parts = self.gatherDistributees(WATER_DISTRIBUTION_ORDER[self.root])
+		for part in parts:
+			if part:
+				extra = max(0, self.water - OPTIMAL_INTERNODE_WATER[self.root] - WATER_USED_BY_INTERNODE_PER_DAY[self.root])
+				if extra > 0:
+					toBeGivenAway = extra * WATER_DISTRIBUTION_SPREAD_PERCENT[self.root] / 100.0
+					taken = part.acceptWater(toBeGivenAway)
+					self.water -= taken
+		parts = self.gatherDistributees(MINERALS_DISTRIBUTION_ORDER[self.root])
+		for part in parts:
+			if part:
+				extra = max(0, self.minerals - OPTIMAL_INTERNODE_MINERALS[self.root] - MINERALS_USED_BY_INTERNODE_PER_DAY[self.root])
+				if extra > 0:
+					toBeGivenAway = extra * MINERALS_DISTRIBUTION_SPREAD_PERCENT[self.root] / 100.0
+					taken = part.acceptMinerals(toBeGivenAway)
+					self.minerals -= taken
+				
+	def gatherDistributees(self, order):
+		distributees = []
+		for name in order:
+			if name == "leaf clusters":
 				if not self.root:
-					supplicants.extend(self.leafClusters)
+					distributees.extend(self.leafClusters)
 			elif name == "apical meristems":
-				supplicants.extend([self.apicalMeristem])
+				distributees.extend([self.apicalMeristem])
 			elif name == "axillary meristems":
-				supplicants.extend(self.axillaryMeristems)
+				distributees.extend(self.axillaryMeristems)
 			elif name == "child":
-				supplicants.extend([self.child])
+				distributees.extend([self.child])
 			elif name == "branches":
-				supplicants.extend(self.branches)
+				distributees.extend(self.branches)
 			elif name == "parent":
-				supplicants.extend([self.parent])
+				distributees.extend([self.parent])
 			elif name == "root":
-				if (not self.root) and self.firstOnPlant:
-					supplicants.extend([self.plant.firstRootInternode])
-			elif name == "above-ground plant":
-				if self.root and self.firstOnPlant:
-					supplicants.extend([self.plant.firstInternode])
-		extraBiomass = max(0, self.biomass - OPTIMAL_INTERNODE_BIOMASS[self.root])
-		toBeGivenAway = extraBiomass * BIOMASS_DISTRIBUTION_SPREAD_PERCENT[self.root] / 100.0
-		for supplicant in supplicants:
-			if supplicant and extraBiomass > 0:
-				biomassTakenBySupplicant = supplicant.acceptBiomass(toBeGivenAway)
-				#print '      biomass', self.biomass, 'extraBiomass', extraBiomass, 'toBeGivenAway', toBeGivenAway, 'taken', biomassTakenBySupplicant
-				self.biomass -= biomassTakenBySupplicant
-				extraBiomass = max(0, self.biomass - OPTIMAL_INTERNODE_BIOMASS[self.root])
-				toBeGivenAway = extraBiomass * BIOMASS_DISTRIBUTION_SPREAD_PERCENT[self.root] / 100.0
-		#print self.age, 'biomass after distribution', self.biomass
-	
+				if (not self.root) and self.firstOnTree:
+					distributees.extend([self.tree.firstRootInternode])
+			elif name == "above-ground tree":
+				if self.root and self.firstOnTree:
+					distributees.extend([self.tree.firstInternode])
+		return distributees
+				
 	def nextDay_Growth(self):
-		if not self.root:
-			self.woody = self.age > INTERNODES_TURN_WOODY_AFTER_THIS_MANY_DAYS
+		self.woody = self.age > INTERNODES_TURN_WOODY_AFTER_THIS_MANY_DAYS
+		biomassBasedProportion = self.biomass / OPTIMAL_INTERNODE_BIOMASS[self.root]
+		waterBasedProportion = self.water / OPTIMAL_INTERNODE_WATER[self.root]
+		mineralsBasedProportion  = self.minerals / OPTIMAL_INTERNODE_MINERALS[self.root]
+		overallProportion = biomassBasedProportion * waterBasedProportion * mineralsBasedProportion
+		if self.firstOnTree:
+			self.length = int(round(overallProportion * FIRST_INTERNODE_LENGTH_AT_FULL_SIZE[self.root]))
+			self.length = max(FIRST_INTERNODE_LENGTH_AT_CREATION[self.root], min(FIRST_INTERNODE_LENGTH_AT_FULL_SIZE[self.root], self.length))
 		else:
-			self.woody = False
-		proportion = self.biomass / OPTIMAL_INTERNODE_BIOMASS[self.root]
-		self.length = max(1, min(INTERNODE_LENGTH_AT_FULL_SIZE[self.root], int(round(proportion * INTERNODE_LENGTH_AT_FULL_SIZE[self.root]))))
-		self.width = max(1, min(INTERNODE_WIDTH_AT_FULL_SIZE[self.root], int(round(proportion * INTERNODE_WIDTH_AT_FULL_SIZE[self.root]))))
+			self.length = int(round(overallProportion * INTERNODE_LENGTH_AT_FULL_SIZE[self.root]))
+			self.length = max(INTERNODE_LENGTH_AT_CREATION[self.root], min(INTERNODE_LENGTH_AT_FULL_SIZE[self.root], self.length))
+		self.width = int(round(overallProportion * INTERNODE_WIDTH_AT_FULL_SIZE[self.root]))
+		self.width = max(INTERNODE_WIDTH_AT_CREATION[self.root], min(INTERNODE_WIDTH_AT_FULL_SIZE[self.root], self.width))
 		self.recalculateBlockPlacementsForChangeInLength()
 		
 	def nextDay_SignalPropagation(self):
@@ -435,17 +500,10 @@ class Internode(PlantPart):
 		angleInDegrees = ANGLE_BETWEEN_STEM_AND_BRANCH_NOT_OFF_TRUNK[self.root]
 		self.endLocation = endPointOfAngledLine(self.location, self.length, 
 					angleInDegrees, self.randomSway, self.forward, self.parentBranchForward, self.side, aboveGround)
-		#print 'seeking from', self.endLocation
-		
-		# CFK PROBLEM: end will jump around from one day to the next
-		# is that okay?????? not sure
-		self.endLocation = seekBetterLocation(self.endLocation, self.root, INTERNODES_SEEK_RADIUS[self.root])
-		
+		if not self.woody and INTERNODES_SEEK_RADIUS[self.root] > 0:
+			self.endLocation = seekBetterLocation(self.endLocation, self.root, INTERNODES_SEEK_RADIUS[self.root])
 		if (self.root and DRAW_ROOTS) or (not self.root and DRAW_STEMS):
-			#print '..... found', self.endLocation
-			# now interpolate between the start and end positions to produce a rough line
 			locationsBetween = locationsBetweenTwoPoints(self.location, self.endLocation, self.length)
-			# place yourself in the locations
 			self.claimStartBlock()
 			self.claimSeriesOfBlocks(locationsBetween)
 			if self.width > 1:
@@ -453,41 +511,61 @@ class Internode(PlantPart):
 					circleLocations = circleAroundPoint(location, self.width, self.forward, self.side, aboveGround)
 					self.claimSeriesOfBlocks(circleLocations)
 			
-	def display(self, indentCounter=0):
+	def describe(self, outputFile, indentCounter=0):
 		if self.root:
 			rootOrNot = "root"
 		else:
 			rootOrNot = ""
-		print INDENT * indentCounter, rootOrNot, 'internode: biomass', self.biomass, "location", self.location, "forward", self.forward, "side", self.side
+		outputFile.write(INDENT * indentCounter + rootOrNot + ' internode: ' + ' alive ' + str(self.alive) + \
+			' biomass ' + str(self.biomass) + " water " + str(self.water) + " minerals " + str(self.minerals) + \
+			" location " + str(self.location) + " forward " + self.forward + " side " + self.side)
+		outputFile.write("\n")
 		if not self.root:
 			for leafCluster in self.leafClusters:
-				leafCluster.display(indentCounter+1)
+				leafCluster.describe(outputFile, indentCounter+1)
 		if self.apicalMeristem:
-			self.apicalMeristem.display(indentCounter+1)
+			self.apicalMeristem.describe(outputFile, indentCounter+1)
 		for meristem in self.axillaryMeristems:
-			meristem.display(indentCounter+1)
+			if meristem:
+				meristem.describe(outputFile, indentCounter+1)
 		if self.child:
-			self.child.display(indentCounter+1)
+			self.child.describe(outputFile, indentCounter+1)
 			
 # -------------------------------------------------------------------------------------------
-class LeafCluster(PlantPart):
+class LeafCluster(TreePart):
 # -------------------------------------------------------------------------------------------
-	def __init__(self, plant, parent, numberOnInternode, location, forward, side):
-		PlantPart.__init__(self, plant, parent, location, forward, side, biomass=START_LEAF_CLUSTER_BIOMASS, water=0, minerals=0)
+	def __init__(self, tree, parent, numberOnInternode, location, forward, side):
+		TreePart.__init__(self, tree, parent, location, forward, side, 
+						biomass=START_LEAF_CLUSTER_BIOMASS, water=START_LEAF_CLUSTER_WATER, minerals=START_LEAF_CLUSTER_MINERALS)
 		self.numberOnInternode = numberOnInternode
 		self.length = LEAF_CLUSTER_LENGTH_AT_CREATION
 		self.randomSway = random.randrange(RANDOM_LEAF_CLUSTER_SWAY) - RANDOM_LEAF_CLUSTER_SWAY // 2
 				
 	def nextDay_Uptake(self):
-		newBiomass = self.calculatePhotosynthesis(self.location, BIOMASS_MADE_BY_FULL_SIZED_LEAF_CLUSTER_PER_DAY_OF_PHOTOSYNTHESIS_WITH_FULL_SUN)
+		sunProportion = sun[(self.location[0], self.location[1])]
+		numBlocksShadingMe = blocksOccupiedAboveLocation(self.location, self)
+		if numBlocksShadingMe > 0:
+			shadeProportion = max(0.0, min(1.0, 1.0 - 1.0 * numBlocksShadingMe / SHADE_TOLERANCE))
+		else:
+			shadeProportion = 1.0
+		waterProportion = self.water / OPTIMAL_LEAF_CLUSTER_WATER
+		mineralsProportion = self.minerals / OPTIMAL_LEAF_CLUSTER_MINERALS
+		biomassProportion = self.biomass / OPTIMAL_LEAF_CLUSTER_BIOMASS
+		combinedEffectsProportion = sunProportion * shadeProportion * waterProportion * mineralsProportion * biomassProportion
+		newBiomass =  max(0.0, OPTIMAL_LEAF_PHOTOSYNTHATE * (1.0 - math.exp(-0.65 * combinedEffectsProportion)))
 		self.biomass += newBiomass
 	
 	def nextDay_Consumption(self):
-		if self.biomass - BIOMASS_USED_BY_LEAF_CLUSTER_PER_DAY < DEATH_BIOMASS_LEAF_CLUSTER:
+		if self.biomass - BIOMASS_USED_BY_LEAF_CLUSTER_PER_DAY < LEAF_CLUSTER_DIES_IF_BIOMASS_GOES_BELOW or \
+				self.water - WATER_USED_BY_LEAF_CLUSTER_PER_DAY < LEAF_CLUSTER_DIES_IF_WATER_GOES_BELOW or \
+				self.minerals - MINERALS_USED_BY_LEAF_CLUSTER_PER_DAY < LEAF_CLUSTER_DIES_IF_MINERALS_GOES_BELOW:
 			self.die()
+			#print 'leaf died', self.biomass, self.water, self.minerals
 		else:
 			self.biomass -= BIOMASS_USED_BY_LEAF_CLUSTER_PER_DAY
-	
+			self.water -= WATER_USED_BY_LEAF_CLUSTER_PER_DAY
+			self.minerals -= MINERALS_USED_BY_LEAF_CLUSTER_PER_DAY
+
 	def nextDay_Distribution(self):
 		extraBiomass = max(0, self.biomass - OPTIMAL_LEAF_CLUSTER_BIOMASS)
 		biomassTakenByParent = self.parent.acceptBiomass(extraBiomass)
@@ -496,8 +574,12 @@ class LeafCluster(PlantPart):
 	def nextDay_Growth(self):
 		location, direction, side = self.parent.locationAndDirectionsForLeafCluster(self.numberOnInternode)
 		self.location = location
-		proportion = self.biomass / OPTIMAL_LEAF_CLUSTER_BIOMASS
-		self.length = max(1, min(LEAF_CLUSTER_LENGTH_AT_FULL_SIZE, int(round(proportion * LEAF_CLUSTER_LENGTH_AT_FULL_SIZE))))
+		biomassBasedProportion = self.biomass / OPTIMAL_LEAF_CLUSTER_BIOMASS
+		waterBasedProportion = self.water / OPTIMAL_LEAF_CLUSTER_WATER
+		mineralsBasedProportion  = self.minerals / OPTIMAL_LEAF_CLUSTER_MINERALS
+		overallProportion = biomassBasedProportion * waterBasedProportion * mineralsBasedProportion
+		self.length = int(round(overallProportion * LEAF_CLUSTER_LENGTH_AT_FULL_SIZE))
+		self.length = max(LEAF_CLUSTER_LENGTH_AT_CREATION, min(LEAF_CLUSTER_LENGTH_AT_FULL_SIZE, self.length))
 		self.recalculateBlockPlacementsForChangeInSize()
 		
 	def recalculateBlockPlacementsForChangeInSize(self):
@@ -543,19 +625,32 @@ class LeafCluster(PlantPart):
 	def acceptBiomass(self, biomassOffered):
 		biomassINeed = max(0, (OPTIMAL_LEAF_CLUSTER_BIOMASS + BIOMASS_USED_BY_LEAF_CLUSTER_PER_DAY) - self.biomass)
 		biomassIWillAccept = min(biomassOffered, biomassINeed)
-		#print 'leafCluster took %s biomass from internode' % biomassIWillAccept
 		self.biomass += biomassIWillAccept
 		return biomassIWillAccept
 		
-	def display(self, indentCounter=0):
-		print INDENT * indentCounter, 'leaf cluster: biomass', self.biomass, "location", self.location, "forward", self.forward, "side", self.side
-		
+	def acceptWater(self, waterOffered):
+		waterINeed = max(0, (OPTIMAL_LEAF_CLUSTER_WATER + WATER_USED_BY_LEAF_CLUSTER_PER_DAY) - self.water)
+		waterIWillAccept = min(waterOffered, waterINeed)
+		self.water += waterIWillAccept
+		return waterIWillAccept
+	
+	def acceptMinerals(self, mineralsOffered):
+		mineralsINeed = max(0, (OPTIMAL_LEAF_CLUSTER_MINERALS + MINERALS_USED_BY_LEAF_CLUSTER_PER_DAY) - self.minerals)
+		mineralsIWillAccept = min(mineralsOffered, mineralsINeed)
+		self.minerals += mineralsIWillAccept
+		return mineralsIWillAccept
+	
+	def describe(self, outputFile, indentCounter=0):
+		outputFile.write(INDENT * indentCounter + ' leaf cluster: ' + ' alive ' + str(self.alive) + \
+			' biomass ' + str(self.biomass) + " water " + str(self.water) + " minerals " + str(self.minerals) + \
+			" location " + str(self.location) + " forward " + self.forward + " side " + self.side)
+		outputFile.write('\n')
 		
 # -------------------------------------------------------------------------------------------
-class FlowerCluster(PlantPart):
+class FlowerCluster(TreePart):
 # -------------------------------------------------------------------------------------------
-	def __init__(self, plant, parent):
-		PlantPart.__init__(self, plant)
+	def __init__(self, tree, parent):
+		TreePart.__init__(self, tree)
 		self.parent = parent 
 	
 	def nextDay_Uptake(self):
@@ -573,14 +668,14 @@ class FlowerCluster(PlantPart):
 	def nextDay_SignalPropagation(self):
 		pass
 
-	def display(self, indentCounter=0):
+	def describe(self, indentCounter=0):
 		print INDENT * indentCounter, 'flower', self.biomass
 		
 # -------------------------------------------------------------------------------------------
-class FruitCluster(PlantPart):
+class FruitCluster(TreePart):
 # -------------------------------------------------------------------------------------------
-	def __init__(self, plant, parent):
-		PlantPart.__init__(self, plant)
+	def __init__(self, tree, parent):
+		TreePart.__init__(self, tree)
 		self.parent = parent 
 			
 	def nextDay_Uptake(self):
@@ -598,10 +693,10 @@ class FruitCluster(PlantPart):
 	def nextDay_SignalPropagation(self):
 		pass
 
-	def display(self, indentCounter=0):
+	def describe(self, indentCounter=0):
 		print INDENT * indentCounter, 'fruit', self.biomass
 # -------------------------------------------------------------------------------------------
-class Plant():
+class Tree():
 # -------------------------------------------------------------------------------------------
 	def __init__(self, x, y, z):
 		self.age = 0
@@ -614,57 +709,75 @@ class Plant():
 		self.firstRootInternodeSideDirection = DIRECTIONS[random.randrange(4)]
 		
 		firstMeristem = Meristem(self, None, False, 0, self.location, "up", self.firstInternodeSideDirection, apical=True)
-		self.firstInternode = firstMeristem.buildInternode(firstOnPlant=True)
+		self.firstInternode = firstMeristem.buildInternode(firstOnTree=True)
 		
 		firstRootMeristem = Meristem(self, None, True, 0, self.location, "down", self.firstRootInternodeSideDirection, apical=True)
-		self.firstRootInternode = firstRootMeristem.buildInternode(firstOnPlant=True)
+		self.firstRootInternode = firstRootMeristem.buildInternode(firstOnTree=True)
 		
 	def nextDay(self):
 		self.firstInternode.nextDay()
 		self.firstRootInternode.nextDay()
 		self.age += 1
 		
-	def display(self):
-		print 'plant'
-		self.firstInternode.display()
-		self.firstRootInternode.display()
+	def describe(self, outputFile):
+		outputFile.write("tree\n")
+		self.firstInternode.describe(outputFile)
+		self.firstRootInternode.describe(outputFile)
 		
-def growPlant(outputFolder):
+def growTree(outputFolder):
 	
 	drawGraphs = False
 	if drawGraphs:
 		print 'writing distribution graphs...'
 		drawSunDistribution(outputFolder)
-		drawWaterDistribution(outputFolder)
-		drawMineralsDistribution(outputFolder)
+		if PATCHY_WATER:
+			drawWaterDistribution(outputFolder)
+		if PATCHY_MINERALS:
+			drawMineralsDistribution(outputFolder)
+			
+	describeTrees = False
+	if describeTrees:
+		outputFileName = outputFolder + 'Tree growth recording.txt'
+		outputFile = open(outputFileName, 'w')
+		
+	try:
+		
+		numTrees = 5
+		print 'starting simulated growth with %s tree(s)...' % numTrees
+		daysPerPulse = 2
+		numPulses = 15
+		trees = []
+		for i in range(numTrees):
+			if numTrees == 1:
+				xLocation = 50
+				yLocation = 50
+			else:
+				xLocation = 10 + random.randrange(80)
+				yLocation = 10 + random.randrange(80)
+			zLocation = GROUND_LEVEL+1
+			newTree = Tree(xLocation, yLocation, zLocation)
+			trees.append(newTree)
+		if describeTrees:
+			outputFile.write("day zero\n")
+			for tree in trees:
+				tree.describe(outputFile)
+		
+		day = 1
+		for i in range(numPulses):
+			for j in range(daysPerPulse):
+				if describeTrees:
+					outputFile.write("day %s\n" % day)
+				for tree in trees:
+					tree.nextDay()
+					if describeTrees:
+						tree.describe(outputFile)
+			drawSpace(day, outputFolder, drawTrees=True, drawSun=True, drawWater=True, drawMinerals=True)
+			day += daysPerPulse
 	
-	numPlants = 3
-	print 'starting simulated growth with %s plant(s)...' % numPlants
-	daysPerPulse = 2
-	numPulses = 15
-	plants = []
-	for i in range(numPlants):
-		if numPlants == 1:
-			xLocation = 50
-			yLocation = 50
-		else:
-			xLocation = 10 + random.randrange(80)
-			yLocation = 10 + random.randrange(80)
-		zLocation = GROUND_LEVEL+1
-		newPlant = Plant(xLocation, yLocation, zLocation)
-		plants.append(newPlant)
-	#for plant in plants:
-	#	plant.display()
-	
-	day = 1
-	for i in range(numPulses):
-		for j in range(daysPerPulse):
-			for plant in plants:
-				plant.nextDay()
-				#plant.display()
-		drawSpace(day, outputFolder, drawSun=True)
-		day += daysPerPulse
-	
+	finally:
+		if describeTrees:
+			outputFile.close()
+
 	print 'done'
 	
 def main():
@@ -672,7 +785,7 @@ def main():
 	for i in range(iterations):
 		outputFolder = setUpOutputFolder("/Users/cfkurtz/Documents/personal/terasology/generated images/")
 		print 'writing files to:', outputFolder
-		growPlant(outputFolder)
+		growTree(outputFolder)
 	
 if __name__ == "__main__":
 	main()
