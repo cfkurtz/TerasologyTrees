@@ -92,7 +92,7 @@ class Meristem(TreePart):
 # -------------------------------------------------------------------------------------------
 	def __init__(self, tree, parent, root, numberOnInternode, location, forward, side, apical=False, biomass=0, water=0, minerals=0):
 		TreePart.__init__(self, tree, parent, location, forward, side, 
-						biomass=START_MERISTEM_BIOMASS[root], water=START_MERISTEM_WATER[root], minerals=START_MERISTEM_MINERALS[root])
+						biomass=START_MERISTEM_BIOMASS[root], water=0, minerals=0)
 		self.apical = apical
 		self.root = root
 		self.numberOnInternode = numberOnInternode
@@ -152,11 +152,8 @@ class Meristem(TreePart):
 	
 	def nextDay_Consumption(self):
 		if self.alive:
-			if self.biomass - BIOMASS_USED_BY_MERISTEM_PER_DAY[self.root] < MERISTEM_DIES_IF_BIOMASS_GOES_BELOW[self.root] or \
-				self.water - WATER_USED_BY_MERISTEM_PER_DAY[self.root] < MERISTEM_DIES_IF_WATER_GOES_BELOW[self.root] or \
-				self.minerals - MINERALS_USED_BY_MERISTEM_PER_DAY[self.root] < MERISTEM_DIES_IF_MINERALS_GOES_BELOW[self.root]:
+			if self.biomass - BIOMASS_USED_BY_MERISTEM_PER_DAY[self.root] < MERISTEM_DIES_IF_BIOMASS_GOES_BELOW[self.root]:
 				self.die()
-				#print 'meristem died', self.biomass, self.water, self.minerals, self.root
 			else:
 				if self.apical:
 					self.active = True
@@ -164,8 +161,6 @@ class Meristem(TreePart):
 					self.calculateActivityLevel()
 				if self.active:
 					self.biomass -= BIOMASS_USED_BY_MERISTEM_PER_DAY[self.root]
-					self.water -= WATER_USED_BY_MERISTEM_PER_DAY[self.root]
-					self.minerals -= MINERALS_USED_BY_MERISTEM_PER_DAY[self.root]
 				
 	def nextDay_Distribution(self):
 		pass
@@ -174,15 +169,11 @@ class Meristem(TreePart):
 		if self.alive:
 			if self.active:
 				if self.reproductive:
-					if self.biomass >= BIOMASS_TO_MAKE_ONE_FLOWER_CLUSTER and \
-						self.water >= WATER_TO_MAKE_ONE_FLOWER_CLUSTER and \
-						self.minerals >= MINERALS_TO_MAKE_ONE_FLOWER_CLUSTER:
+					if self.biomass >= BIOMASS_TO_MAKE_ONE_FLOWER_CLUSTER:
 						self.buildFlowerCluster()
 						self.parent.removeMeristemThatMadeInternode(self)
 				else:
-					if self.biomass >= BIOMASS_TO_MAKE_ONE_PHYTOMER[self.root] and \
-						self.water >= WATER_TO_MAKE_ONE_PHYTOMER[self.root] and \
-						self.minerals >= MINERALS_TO_MAKE_ONE_PHYTOMER[self.root]:
+					if self.biomass >= BIOMASS_TO_MAKE_ONE_PHYTOMER[self.root]:
 						self.buildInternode()
 						self.parent.removeMeristemThatMadeInternode(self)
 						
@@ -206,7 +197,6 @@ class Meristem(TreePart):
 					self.active = randomNumber < probability
 					if self.active and not self.root and self.tree.reproductivePhaseHasStarted:
 						self.reproduce()
-					#print 'axillary meristem distance', distance, 'prob', probability, 'number', randomNumber, 'active', self.active
 		
 	def distanceOfParentFromBranchApex(self):
 		distance = 0
@@ -230,33 +220,15 @@ class Meristem(TreePart):
 		self.biomass += biomassIWillAccept
 		return biomassIWillAccept
 	
-	def acceptWater(self, waterOffered):
-		if self.alive and self.active:
-			waterINeed = max(0, (WATER_TO_MAKE_ONE_PHYTOMER[self.root] + WATER_USED_BY_MERISTEM_PER_DAY[self.root]) - self.water)
-		else:
-			waterINeed = 0
-		waterIWillAccept = min(waterOffered, waterINeed)
-		self.water += waterIWillAccept
-		return waterIWillAccept
-	
-	def acceptMinerals(self, mineralsOffered):
-		if self.alive and self.active:
-			mineralsINeed = max(0, (MINERALS_TO_MAKE_ONE_PHYTOMER[self.root] + MINERALS_USED_BY_MERISTEM_PER_DAY[self.root]) - self.minerals)
-		else:
-			mineralsINeed = 0
-		mineralsIWillAccept = min(mineralsOffered, mineralsINeed)
-		self.minerals += mineralsIWillAccept
-		return mineralsIWillAccept
-	
 	def reproduce(self):
-		print 'in meristem reproduce', self.alive, self.root
+		#print 'in meristem reproduce', self.alive, self.root
 		if self.alive and not self.root:
 			if self.apical:
 				probabilityIWillTurnReproductive = PROBABILITY_THAT_ANY_APICAL_MERISTEM_WILL_SWITCH_TO_REPRO_MODE
 			else:
 				probabilityIWillTurnReproductive = PROBABILITY_THAT_ANY_AXILLARY_MERISTEM_WILL_SWITCH_TO_REPRO_MODE
 			randomNumber = random.random()
-			print probabilityIWillTurnReproductive, randomNumber
+			#print probabilityIWillTurnReproductive, randomNumber
 			if randomNumber < probabilityIWillTurnReproductive:
 				self.reproductive = True
 	
@@ -279,8 +251,7 @@ class Meristem(TreePart):
 class Internode(TreePart):
 # -------------------------------------------------------------------------------------------
 	def __init__(self, tree, parent, root, location, forward, side, firstOnTree, firstOnBranch, parentBranchForward, iAmABranchOffMyParent):
-		TreePart.__init__(self, tree, parent, location, forward, side, 
-						biomass=START_INTERNODE_BIOMASS[root], water=START_INTERNODE_WATER[root], minerals=START_INTERNODE_MINERALS[root])
+		TreePart.__init__(self, tree, parent, location, forward, side, biomass=START_INTERNODE_BIOMASS[root], water=0, minerals=0)
 		self.child = None
 		self.branches = []
 		self.flowerClusters = []
@@ -409,21 +380,6 @@ class Internode(TreePart):
 		
 	def nextDay_Uptake(self):
 		if self.alive:
-			if (not self.root) and (not self.woody):
-				sunProportion = sun[(self.endLocation[0], self.endLocation[1])]
-				numBlocksShadingMe = blocksOccupiedAboveLocation(self.endLocation, self)
-				if numBlocksShadingMe > 0:
-					shadeProportion = max(0.0, min(1.0, 1.0 - 1.0 * numBlocksShadingMe / SHADE_TOLERANCE))
-				else:
-					shadeProportion = 1.0
-				waterProportion = self.water / OPTIMAL_INTERNODE_WATER[self.root]
-				mineralsProportion = self.minerals / OPTIMAL_INTERNODE_MINERALS[self.root]
-				biomassProportion = self.biomass / OPTIMAL_INTERNODE_BIOMASS[self.root]
-				combinedEffectsProportion = sunProportion * 0.2 + shadeProportion + 0.2 + waterProportion + 0.2 + mineralsProportion * 0.2 + biomassProportion * 0.2
-				combinedEffectsProportion = max(0.0, min(1.0, combinedEffectsProportion))
-				sCurve = 1.0 - math.exp(-0.65 * combinedEffectsProportion)
-				self.newBiomass =  sCurve * OPTIMAL_INTERNODE_PHOTOSYNTHATE
-				self.biomass += self.newBiomass
 			if self.root:
 				availableWater, locationsConsidered = waterOrMineralsInRegion("water", self.endLocation, ROOT_WATER_EXTRACTION_RADIUS)
 				if availableWater > 0:
@@ -450,21 +406,13 @@ class Internode(TreePart):
 		if self.alive:
 			if self.woody:
 				biomassINeedToUseToday = 0
-				waterINeedToUseToday = 0
-				mineralsINeedToUseToday = 0
 			else:
 				biomassINeedToUseToday = BIOMASS_USED_BY_INTERNODE_PER_DAY[self.root]
-				waterINeedToUseToday = WATER_USED_BY_INTERNODE_PER_DAY[self.root]
-				mineralsINeedToUseToday = MINERALS_USED_BY_INTERNODE_PER_DAY[self.root]
-			if self.biomass - biomassINeedToUseToday < INTERNODE_DIES_IF_BIOMASS_GOES_BELOW[self.root] or \
-					self.water - waterINeedToUseToday < INTERNODE_DIES_IF_WATER_GOES_BELOW[self.root] or \
-					self.minerals - mineralsINeedToUseToday < INTERNODE_DIES_IF_MINERALS_GOES_BELOW[self.root]:
+			if self.biomass - biomassINeedToUseToday < INTERNODE_DIES_IF_BIOMASS_GOES_BELOW[self.root]:
 				self.die()
 				#print 'internode died', self.biomass, self.water, self.minerals, self.root
 			else:
 				self.biomass -= biomassINeedToUseToday
-				self.water -= waterINeedToUseToday
-				self.minerals -= mineralsINeedToUseToday
 	
 	def die(self):
 		sendDieSignalTo = []
@@ -491,7 +439,7 @@ class Internode(TreePart):
 		parts = self.gatherDistributees(WATER_DISTRIBUTION_ORDER[self.root])
 		for part in parts:
 			if part:
-				extra = max(0, self.water - OPTIMAL_INTERNODE_WATER[self.root] - WATER_USED_BY_INTERNODE_PER_DAY[self.root])
+				extra = self.water
 				if extra > 0:
 					toBeGivenAway = extra * WATER_DISTRIBUTION_SPREAD_PERCENT[self.root] / 100.0
 					taken = part.acceptWater(toBeGivenAway)
@@ -499,7 +447,7 @@ class Internode(TreePart):
 		parts = self.gatherDistributees(MINERALS_DISTRIBUTION_ORDER[self.root])
 		for part in parts:
 			if part:
-				extra = max(0, self.minerals - OPTIMAL_INTERNODE_MINERALS[self.root] - MINERALS_USED_BY_INTERNODE_PER_DAY[self.root])
+				extra = self.minerals
 				if extra > 0:
 					toBeGivenAway = extra * MINERALS_DISTRIBUTION_SPREAD_PERCENT[self.root] / 100.0
 					taken = part.acceptMinerals(toBeGivenAway)
@@ -538,17 +486,14 @@ class Internode(TreePart):
 	def nextDay_Growth(self):
 		self.woody = self.age > INTERNODES_TURN_WOODY_AFTER_THIS_MANY_DAYS
 		if self.alive:
-			biomassBasedProportion = self.biomass / OPTIMAL_INTERNODE_BIOMASS[self.root]
-			waterBasedProportion = self.water / OPTIMAL_INTERNODE_WATER[self.root]
-			mineralsBasedProportion  = self.minerals / OPTIMAL_INTERNODE_MINERALS[self.root]
-			overallProportion = biomassBasedProportion * waterBasedProportion * mineralsBasedProportion
+			proportion = self.biomass / OPTIMAL_INTERNODE_BIOMASS[self.root]
 			if self.firstOnTree:
-				self.length = int(round(overallProportion * FIRST_INTERNODE_LENGTH_AT_FULL_SIZE[self.root]))
+				self.length = int(round(proportion * FIRST_INTERNODE_LENGTH_AT_FULL_SIZE[self.root]))
 				self.length = max(FIRST_INTERNODE_LENGTH_AT_CREATION[self.root], min(FIRST_INTERNODE_LENGTH_AT_FULL_SIZE[self.root], self.length))
 			else:
-				self.length = int(round(overallProportion * INTERNODE_LENGTH_AT_FULL_SIZE[self.root]))
+				self.length = int(round(proportion * INTERNODE_LENGTH_AT_FULL_SIZE[self.root]))
 				self.length = max(INTERNODE_LENGTH_AT_CREATION[self.root], min(INTERNODE_LENGTH_AT_FULL_SIZE[self.root], self.length))
-			self.width = int(round(overallProportion * INTERNODE_WIDTH_AT_FULL_SIZE[self.root]))
+			self.width = int(round(proportion * INTERNODE_WIDTH_AT_FULL_SIZE[self.root]))
 			self.width = max(INTERNODE_WIDTH_AT_CREATION[self.root], min(INTERNODE_WIDTH_AT_FULL_SIZE[self.root], self.width))
 		
 	def nextDay_Drawing(self):
@@ -589,7 +534,7 @@ class Internode(TreePart):
 		
 	def reproduce(self):
 		if not self.root:
-			print 'internode is sending on repro signal'
+			#print 'internode is sending on repro signal'
 			sendSignalTo = []
 			sendSignalTo.extend([self.apicalMeristem])
 			sendSignalTo.extend(self.axillaryMeristems)
@@ -623,8 +568,7 @@ class Internode(TreePart):
 class LeafCluster(TreePart):
 # -------------------------------------------------------------------------------------------
 	def __init__(self, tree, parent, numberOnInternode, location, forward, side):
-		TreePart.__init__(self, tree, parent, location, forward, side, 
-						biomass=START_LEAF_CLUSTER_BIOMASS, water=START_LEAF_CLUSTER_WATER, minerals=START_LEAF_CLUSTER_MINERALS)
+		TreePart.__init__(self, tree, parent, location, forward, side, biomass=START_LEAF_CLUSTER_BIOMASS, water=0, minerals=0)
 		self.numberOnInternode = numberOnInternode
 		self.length = LEAF_CLUSTER_LENGTH_AT_CREATION
 		self.randomSway = random.randrange(RANDOM_LEAF_CLUSTER_SWAY) - RANDOM_LEAF_CLUSTER_SWAY // 2
@@ -638,10 +582,9 @@ class LeafCluster(TreePart):
 				shadeProportion = max(0.0, min(1.0, 1.0 - 1.0 * numBlocksShadingMe / SHADE_TOLERANCE))
 			else:
 				shadeProportion = 1.0
-			waterProportion = self.water / OPTIMAL_LEAF_CLUSTER_WATER
-			mineralsProportion = self.minerals / OPTIMAL_LEAF_CLUSTER_MINERALS
+			waterProportion = self.water / WATER_FOR_OPTIMAL_PHOTOSYNTHESIS
+			mineralsProportion = self.minerals / MINERALS_FOR_OPTIMAL_PHOTOSYNTHESIS
 			biomassProportion = self.biomass / OPTIMAL_LEAF_CLUSTER_BIOMASS
-			#combinedEffectsProportion = sunProportion * shadeProportion * waterProportion * mineralsProportion * biomassProportion
 			combinedEffectsProportion = sunProportion * 0.2 + shadeProportion + 0.2 + waterProportion + 0.2 + mineralsProportion * 0.2 + biomassProportion * 0.2
 			combinedEffectsProportion = max(0.0, min(1.0, combinedEffectsProportion))
 			sCurve = 1.0 - math.exp(-0.65 * combinedEffectsProportion)
@@ -655,14 +598,10 @@ class LeafCluster(TreePart):
 	
 	def nextDay_Consumption(self):
 		if self.alive:
-			if self.biomass - BIOMASS_USED_BY_LEAF_CLUSTER_PER_DAY < LEAF_CLUSTER_DIES_IF_BIOMASS_GOES_BELOW or \
-					self.water - WATER_USED_BY_LEAF_CLUSTER_PER_DAY < LEAF_CLUSTER_DIES_IF_WATER_GOES_BELOW or \
-					self.minerals - MINERALS_USED_BY_LEAF_CLUSTER_PER_DAY < LEAF_CLUSTER_DIES_IF_MINERALS_GOES_BELOW:
+			if self.biomass - BIOMASS_USED_BY_LEAF_CLUSTER_PER_DAY < LEAF_CLUSTER_DIES_IF_BIOMASS_GOES_BELOW:
 				self.die()
 			else:
 				self.biomass -= BIOMASS_USED_BY_LEAF_CLUSTER_PER_DAY
-				self.water -= WATER_USED_BY_LEAF_CLUSTER_PER_DAY
-				self.minerals -= MINERALS_USED_BY_LEAF_CLUSTER_PER_DAY
 
 	def nextDay_Distribution(self):
 		if self.alive:
@@ -674,11 +613,8 @@ class LeafCluster(TreePart):
 		location, direction, side = self.parent.locationAndDirectionsForLeafCluster(self.numberOnInternode)
 		self.location = location
 		if self.alive:
-			biomassBasedProportion = self.biomass / OPTIMAL_LEAF_CLUSTER_BIOMASS
-			waterBasedProportion = self.water / OPTIMAL_LEAF_CLUSTER_WATER
-			mineralsBasedProportion  = self.minerals / OPTIMAL_LEAF_CLUSTER_MINERALS
-			overallProportion = biomassBasedProportion * waterBasedProportion * mineralsBasedProportion
-			self.length = int(round(overallProportion * LEAF_CLUSTER_LENGTH_AT_FULL_SIZE))
+			proportion = self.biomass / OPTIMAL_LEAF_CLUSTER_BIOMASS
+			self.length = int(round(proportion * LEAF_CLUSTER_LENGTH_AT_FULL_SIZE))
 			self.length = max(LEAF_CLUSTER_LENGTH_AT_CREATION, min(LEAF_CLUSTER_LENGTH_AT_FULL_SIZE, self.length))
 		
 	def nextDay_Drawing(self):
@@ -711,7 +647,7 @@ class LeafCluster(TreePart):
 		
 	def acceptWater(self, waterOffered):
 		if self.alive:
-			waterINeed = max(0, (OPTIMAL_LEAF_CLUSTER_WATER + WATER_USED_BY_LEAF_CLUSTER_PER_DAY) - self.water)
+			waterINeed = max(0, WATER_FOR_OPTIMAL_PHOTOSYNTHESIS - self.water)
 		else:
 			waterINeed = 0
 		waterIWillAccept = min(waterOffered, waterINeed)
@@ -720,7 +656,7 @@ class LeafCluster(TreePart):
 	
 	def acceptMinerals(self, mineralsOffered):
 		if self.alive:
-			mineralsINeed = max(0, (OPTIMAL_LEAF_CLUSTER_MINERALS + MINERALS_USED_BY_LEAF_CLUSTER_PER_DAY) - self.minerals)
+			mineralsINeed = max(0, MINERALS_FOR_OPTIMAL_PHOTOSYNTHESIS - self.minerals)
 		else:
 			mineralsINeed = 0
 		mineralsIWillAccept = min(mineralsOffered, mineralsINeed)
@@ -737,8 +673,7 @@ class LeafCluster(TreePart):
 class FlowerCluster(TreePart):
 # -------------------------------------------------------------------------------------------
 	def __init__(self, tree, parent, numberOnInternode, apical, location, forward, side):
-		TreePart.__init__(self, tree, parent, location, forward, side, 
-						biomass=START_FLOWER_CLUSTER_BIOMASS, water=START_FLOWER_CLUSTER_WATER, minerals=START_FLOWER_CLUSTER_MINERALS)
+		TreePart.__init__(self, tree, parent, location, forward, side, biomass=START_FLOWER_CLUSTER_BIOMASS, water=0, minerals=0)
 		self.numberOnInternode = numberOnInternode
 		self.apical = apical
 		self.length = FLOWER_CLUSTER_LENGTH_AT_CREATION
@@ -753,15 +688,11 @@ class FlowerCluster(TreePart):
 		pass
 	
 	def nextDay_Consumption(self):
-		if self.biomass - BIOMASS_USED_BY_FLOWER_CLUSTER_PER_DAY < FLOWER_CLUSTER_DIES_IF_BIOMASS_GOES_BELOW or \
-				self.water - WATER_USED_BY_FLOWER_CLUSTER_PER_DAY < FLOWER_CLUSTER_DIES_IF_WATER_GOES_BELOW or \
-				self.minerals - MINERALS_USED_BY_FLOWER_CLUSTER_PER_DAY < FLOWER_CLUSTER_DIES_IF_MINERALS_GOES_BELOW:
+		if self.biomass - BIOMASS_USED_BY_FLOWER_CLUSTER_PER_DAY < FLOWER_CLUSTER_DIES_IF_BIOMASS_GOES_BELOW:
 			self.die()
 			#print 'leaf died', self.biomass, self.water, self.minerals
 		else:
 			self.biomass -= BIOMASS_USED_BY_FLOWER_CLUSTER_PER_DAY
-			self.water -= WATER_USED_BY_FLOWER_CLUSTER_PER_DAY
-			self.minerals -= MINERALS_USED_BY_FLOWER_CLUSTER_PER_DAY
 
 	def nextDay_Distribution(self):
 		pass
@@ -772,11 +703,8 @@ class FlowerCluster(TreePart):
 		else:
 			location, direction, side = self.parent.locationAndDirectionsForAxillaryMeristem(self.numberOnInternode)
 			self.location = location
-			biomassBasedProportion = self.biomass / OPTIMAL_FLOWER_CLUSTER_BIOMASS
-			waterBasedProportion = self.water / OPTIMAL_FLOWER_CLUSTER_WATER
-			mineralsBasedProportion  = self.minerals / OPTIMAL_FLOWER_CLUSTER_MINERALS
-			overallProportion = biomassBasedProportion * waterBasedProportion * mineralsBasedProportion
-			self.length = int(round(overallProportion * FLOWER_CLUSTER_LENGTH_AT_FULL_SIZE))
+			proportion = self.biomass / OPTIMAL_FLOWER_CLUSTER_BIOMASS
+			self.length = int(round(proportion * FLOWER_CLUSTER_LENGTH_AT_FULL_SIZE))
 			self.length = max(FLOWER_CLUSTER_LENGTH_AT_CREATION, min(FLOWER_CLUSTER_LENGTH_AT_FULL_SIZE, self.length))
 		
 	def nextDay_Drawing(self):
@@ -785,7 +713,7 @@ class FlowerCluster(TreePart):
 				spineEndLocation = endPointOfAngledLine(self.location, self.length, 
 							FLOWER_CLUSTER_ANGLE_WITH_STEM, self.randomSway, self.forward, self.parent.forward, self.side)
 				spine = locationsBetweenTwoPoints(self.location, spineEndLocation, self.length)
-				sizeProportion = 1.0 * self.length / FLOWER_CLUSTER_LENGTH_AT_FULL_SIZE
+				sizeProportion = self.biomass / OPTIMAL_FLOWER_CLUSTER_BIOMASS
 				# # spine, pattern, angle, sides, sizeProportion, forward, side
 				wings = locationsForShapeAroundSpine(spine, FLOWER_CLUSTER_SHAPE_PATTERN, FLOWER_CLUSTER_SHAPE_ANGLE, FLOWER_CLUSTER_SIDES, 
 							sizeProportion, self.forward, self.side)
@@ -807,24 +735,6 @@ class FlowerCluster(TreePart):
 		self.biomass += biomassIWillAccept
 		return biomassIWillAccept
 		
-	def acceptWater(self, waterOffered):
-		if self.alive:
-			waterINeed = max(0, (OPTIMAL_FLOWER_CLUSTER_WATER + WATER_USED_BY_FLOWER_CLUSTER_PER_DAY) - self.water)
-		else:
-			waterINeed = 0
-		waterIWillAccept = min(waterOffered, waterINeed)
-		self.water += waterIWillAccept
-		return waterIWillAccept
-	
-	def acceptMinerals(self, mineralsOffered):
-		if self.alive:
-			mineralsINeed = max(0, (OPTIMAL_FLOWER_CLUSTER_MINERALS + MINERALS_USED_BY_FLOWER_CLUSTER_PER_DAY) - self.minerals)
-		else:
-			mineralsINeed = 0
-		mineralsIWillAccept = min(mineralsOffered, mineralsINeed)
-		self.minerals += mineralsIWillAccept
-		return mineralsIWillAccept
-	
 	def describe(self, outputFile, indentCounter=0):
 		outputFile.write(INDENT * indentCounter + ' flower cluster: ' + ' alive ' + str(self.alive) + \
 			' biomass ' + str(self.biomass) + " water " + str(self.water) + " minerals " + str(self.minerals) + \
@@ -835,8 +745,7 @@ class FlowerCluster(TreePart):
 class FruitCluster(TreePart):
 # -------------------------------------------------------------------------------------------
 	def __init__(self, tree, parent, numberOnInternode, location, forward, side):
-		TreePart.__init__(self, tree, parent, location, forward, side, 
-						biomass=START_FRUIT_CLUSTER_BIOMASS, water=START_FRUIT_CLUSTER_WATER, minerals=START_FRUIT_CLUSTER_MINERALS)
+		TreePart.__init__(self, tree, parent, location, forward, side, biomass=START_FRUIT_CLUSTER_BIOMASS, water=0, minerals=0)
 		self.numberOnInternode = numberOnInternode
 		self.length = FRUIT_CLUSTER_LENGTH_AT_CREATION
 		self.randomSway = random.randrange(RANDOM_FRUIT_CLUSTER_SWAY) - RANDOM_FRUIT_CLUSTER_SWAY // 2
@@ -845,14 +754,10 @@ class FruitCluster(TreePart):
 		pass
 	
 	def nextDay_Consumption(self):
-		if self.biomass - BIOMASS_USED_BY_FRUIT_CLUSTER_PER_DAY < FRUIT_CLUSTER_DIES_IF_BIOMASS_GOES_BELOW or \
-				self.water - WATER_USED_BY_FRUIT_CLUSTER_PER_DAY < FRUIT_CLUSTER_DIES_IF_WATER_GOES_BELOW or \
-				self.minerals - MINERALS_USED_BY_FRUIT_CLUSTER_PER_DAY < FRUIT_CLUSTER_DIES_IF_MINERALS_GOES_BELOW:
+		if self.biomass - BIOMASS_USED_BY_FRUIT_CLUSTER_PER_DAY < FRUIT_CLUSTER_DIES_IF_BIOMASS_GOES_BELOW:
 			self.die()
 		else:
 			self.biomass -= BIOMASS_USED_BY_FRUIT_CLUSTER_PER_DAY
-			self.water -= WATER_USED_BY_FRUIT_CLUSTER_PER_DAY
-			self.minerals -= MINERALS_USED_BY_FRUIT_CLUSTER_PER_DAY
 
 	def nextDay_Distribution(self):
 		pass
@@ -860,11 +765,8 @@ class FruitCluster(TreePart):
 	def nextDay_Growth(self):
 		location, direction, side = self.parent.locationAndDirectionsForAxillaryMeristem(self.numberOnInternode)
 		self.location = location
-		biomassBasedProportion = self.biomass / OPTIMAL_FRUIT_CLUSTER_BIOMASS
-		waterBasedProportion = self.water / OPTIMAL_FRUIT_CLUSTER_WATER
-		mineralsBasedProportion  = self.minerals / OPTIMAL_FRUIT_CLUSTER_MINERALS
-		overallProportion = biomassBasedProportion * waterBasedProportion * mineralsBasedProportion
-		self.length = int(round(overallProportion * FRUIT_CLUSTER_LENGTH_AT_FULL_SIZE))
+		proportion = self.biomass / OPTIMAL_FRUIT_CLUSTER_BIOMASS
+		self.length = int(round(proportion * FRUIT_CLUSTER_LENGTH_AT_FULL_SIZE))
 		self.length = max(FRUIT_CLUSTER_LENGTH_AT_CREATION, min(FRUIT_CLUSTER_LENGTH_AT_FULL_SIZE, self.length))
 		
 	def nextDay_Drawing(self):
@@ -895,24 +797,6 @@ class FruitCluster(TreePart):
 		self.biomass += biomassIWillAccept
 		return biomassIWillAccept
 		
-	def acceptWater(self, waterOffered):
-		if self.alive:
-			waterINeed = max(0, (OPTIMAL_FRUIT_CLUSTER_WATER + WATER_USED_BY_FRUIT_CLUSTER_PER_DAY) - self.water)
-		else:
-			waterINeed = 0
-		waterIWillAccept = min(waterOffered, waterINeed)
-		self.water += waterIWillAccept
-		return waterIWillAccept
-	
-	def acceptMinerals(self, mineralsOffered):
-		if self.alive:
-			mineralsINeed = max(0, (OPTIMAL_FRUIT_CLUSTER_MINERALS + MINERALS_USED_BY_FRUIT_CLUSTER_PER_DAY) - self.minerals)
-		else:
-			mineralsINeed = 0
-		mineralsIWillAccept = min(mineralsOffered, mineralsINeed)
-		self.minerals += mineralsIWillAccept
-		return mineralsIWillAccept
-	
 	def describe(self, outputFile, indentCounter=0):
 		outputFile.write(INDENT * indentCounter + ' Fruit cluster: ' + ' alive ' + str(self.alive) + \
 			' biomass ' + str(self.biomass) + " water " + str(self.water) + " minerals " + str(self.minerals) + \
@@ -943,7 +827,7 @@ class Tree():
 	def nextDay(self):
 		if self.age == REPRODUCTIVE_MODE_STARTS_ON_DAY:
 			self.reproductivePhaseHasStarted = True
-			print 'tree is sending first repro signal'
+			#print 'tree is sending first repro signal'
 			self.firstInternode.reproduce()
 		self.firstInternode.nextDay()
 		self.firstRootInternode.nextDay()

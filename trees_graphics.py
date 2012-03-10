@@ -40,7 +40,7 @@ def graphPNG3DScatter(xValues, yValues, zValues, colors, SIZE_OF_SPACE_XY, xAxis
 	axes.set_xlim3d(lowest, highest)
 	axes.set_ylim(lowest, highest)
 	axes.set_ylim3d(lowest, highest)
-	axes.set_zlim3d(lowest, highest*2) # twice as tall 
+	axes.set_zlim3d(lowest, highest*3) 
 	axes.view_init(20, 120)
 	
 	if drawLines:
