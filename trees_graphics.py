@@ -244,6 +244,32 @@ def endPointOfAngledLine(location, length, angleInDegrees, swayInDegrees, forwar
 	endLocation = boundLocation(endLocation, aboveGround)
 	return endLocation
 
+def locationsForShapeAroundSpine(spine, pattern, angle, numSides, sizeProportion, forward, side):
+		lengthIndex = 0
+		sides = []
+		for location in spine:
+			shapeLookupIndex = lengthIndex % len(pattern)
+			sideExtent = int(pattern[shapeLookupIndex])
+			sideExtentConsideringProportion = max(0, min(sideExtent, int(round(sizeProportion * sideExtent))))
+			if sideExtentConsideringProportion > 0:
+				#print 'sides', sides
+				if numSides == 1:
+					turnings = [1]
+				elif numSides == 2:
+					turnings = [1, 3]
+				elif numSides == 3:
+					turnings = [1, 2, 3]
+				elif numSides == 4:
+					turnings = [1, 2, 3, 4]
+				for turning in turnings:
+					sideDirection = rotateAround(forward, side, turning)
+					# location, length, angleInDegrees, swayInDegrees, forward, parentForward, side
+					sideEndLocation = endPointOfAngledLine(location, sideExtentConsideringProportion, 
+								angle, 0, sideDirection, forward, forward)
+					oneSidePiece = locationsBetweenTwoPoints(location, sideEndLocation, sideExtentConsideringProportion)
+					sides.extend(oneSidePiece)
+			lengthIndex += 1
+		return sides
 
 
 

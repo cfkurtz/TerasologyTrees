@@ -11,7 +11,7 @@ from trees_parameters import *
 from trees_graphics import *
 
 import matplotlib.cm as cm
-import matplotlib.colors as colors
+import matplotlib.colors as mpcolors
 
 space = {}
 
@@ -196,11 +196,20 @@ def colorForLocation(location):
 						color = COLOR_LEAF_CLUSTER
 					else:
 						color = COLOR_LEAF_CLUSTER_DEAD
-				return colors.colorConverter.to_rgba(color)
-				# cfk add others later
+				elif name == "FlowerCluster":
+					if treePart.alive:
+						color = COLOR_FLOWER_CLUSTER
+					else:
+						color = COLOR_FLOWER_CLUSTER_DEAD
+				elif name == "FruitCluster":
+					if treePart.alive:
+						color = COLOR_FRUIT_CLUSTER
+					else:
+						color = COLOR_FRUIT_CLUSTER_DEAD
+				return mpcolors.colorConverter.to_rgba(color)
 	return None
 
-def drawSpace(age, outputFolder, drawTrees=True, drawSun=False, drawWater=False, drawMinerals=False):
+def drawSpace(age, outputFolder, drawTrees=True, drawSun=False, drawWater=False, drawMinerals=False, drawSurface=False):
 	allXValues = []
 	allYValues = []
 	allZValues = []
@@ -223,6 +232,16 @@ def drawSpace(age, outputFolder, drawTrees=True, drawSun=False, drawWater=False,
 		allYValues.extend(yValues)
 		allZValues.extend(zValues)
 		allColors.extend(colors)
+	if drawSurface:
+		spacing = 5
+		whiteColor = mpcolors.colorConverter.to_rgba('white')
+		for i in range(SIZE_OF_SPACE_XY):
+			for j in range(SIZE_OF_SPACE_XY):
+				if (i % spacing == 0) and (j % spacing == 0):
+					allXValues.append(i)
+					allYValues.append(j)
+					allZValues.append(GROUND_LEVEL+1)
+					allColors.append(whiteColor)
 	if drawTrees:
 		xValues = []
 		yValues = []
