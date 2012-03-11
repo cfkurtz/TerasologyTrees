@@ -83,12 +83,12 @@ APICAL_DOMINANCE_EXTENDS_FOR = [3, 2]
 # Note that if the apical bud gets snipped off and is absent, the apical dominance will disappear for that branch.
 # min: 0 would be no apical dominance whatsoever, as though there were no apical bud.
 
-ANGLE_BETWEEN_STEM_AND_BRANCH_OFF_TRUNK = [45, 40]
+ANGLE_BETWEEN_STEM_AND_BRANCH_OFF_TRUNK = [30, 40]
 # The angle at which branches develop off the main trunk of the tree (top-side or root), in degrees.
 # min: you would probably want this to be at least ten degrees
 # max: to get drooping-down branches, set this above 90 degrees; above 180 it would start to wrap around again
 
-ANGLE_BETWEEN_STEM_AND_BRANCH_NOT_OFF_TRUNK = [45, 20]
+ANGLE_BETWEEN_STEM_AND_BRANCH_NOT_OFF_TRUNK = [10, 20]
 # The angle at which branches that are NOT off the main trunk develop.
 # If you look at real trees, they usually have a larger angle coming off the trunk, 
 # and the angle gets smaller as the branches get smaller. Having two parameters makes that look better.
@@ -229,8 +229,8 @@ LEAF_CLUSTER_LENGTH_AT_CREATION = 1
 LEAF_CLUSTER_ANGLE_WITH_STEM = 40
 LEAF_CLUSTER_SHAPE_ANGLE = 30
 RANDOM_LEAF_CLUSTER_SWAY = 20
-LEAF_CLUSTER_SHAPE_PATTERN = "12"
-LEAF_CLUSTER_SIDES = 4
+LEAF_CLUSTER_SHAPE_PATTERN = "43211"
+LEAF_CLUSTER_SIDES = 2
 COLOR_LEAF_CLUSTER = "#488214"
 COLOR_LEAF_CLUSTER_DEAD = 'b' #"#5E2605"
 
@@ -252,7 +252,7 @@ PROBABILITY_THAT_ANY_AXILLARY_MERISTEM_WILL_SWITCH_TO_REPRO_MODE = 0.5
 MINIMUM_DAYS_FLOWER_APPEARS_EVEN_WITH_OPTIMAL_BIOMASS = 3
 
 # FLOWER CLUSTERS - DRAWING
-FLOWER_CLUSTER_LENGTH_AT_FULL_SIZE = 5
+FLOWER_CLUSTER_LENGTH_AT_FULL_SIZE = 1
 FLOWER_CLUSTER_LENGTH_AT_CREATION = 1
 FLOWER_CLUSTER_ANGLE_WITH_STEM = 40
 FLOWER_CLUSTER_SHAPE_ANGLE = 30
@@ -273,7 +273,7 @@ BIOMASS_USED_BY_FRUIT_CLUSTER_PER_DAY = 0.1
 FRUIT_CLUSTER_DIES_IF_BIOMASS_GOES_BELOW = 0.01
 
 # FRUIT CLUSTERS - DRAWING
-FRUIT_CLUSTER_LENGTH_AT_FULL_SIZE = 5
+FRUIT_CLUSTER_LENGTH_AT_FULL_SIZE = 1
 FRUIT_CLUSTER_LENGTH_AT_CREATION = 1
 FRUIT_CLUSTER_ANGLE_WITH_STEM = 40
 FRUIT_CLUSTER_SHAPE_ANGLE = 30

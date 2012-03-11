@@ -8,7 +8,16 @@ class Point3D:
 		self.z = z
 		
 	def __str__(self):
-		return "Point3D(%s, %s, %s)" % (self.x, self.y, self.z)
+		return "Point3D (%s, %s, %s)" % (self.x, self.y, self.z)
+	
+	def __eq__(self, other):
+		return self.x == other.x and self.y == other.y and self.z == other.z
+	
+	def __hash__(self):
+		return hash((self.x, self.y, self.z))
+	
+	def rounded(self):
+		return Point3D(int(round(self.x)), int(round(self.y)), int(round(self.z)))
 
 def Point3D_setXYZ(thePoint, aX, aY, aZ):
 	thePoint.x = aX
@@ -71,7 +80,7 @@ class Matrix3D:
 		self.location = Point3D(x, y, z)
 		
 	def __repr__(self):
-		return "KfMatrix: (%f %f %f) (%f %f %f) (%f %f %f)" %(self.a0, self.a1, self.a2, self.b0, self.b1, self.b2, self.c0, self.c1, self.c2)
+		return "Matrix3D: (%f %f %f) (%f %f %f) (%f %f %f)" %(self.a0, self.a1, self.a2, self.b0, self.b1, self.b2, self.c0, self.c1, self.c2)
 	
 	# ---------------------------------------------------------------------------------- matrix initializing and copying 
 	def initializeAsUnitMatrix(self):
@@ -88,7 +97,7 @@ class Matrix3D:
 		self.location.y = 0.0
 		self.location.z = 0.0
 		
-	def setXYZ(self, x, y, z):
+	def setLocation(self, x, y, z):
 		self.location.x = x
 		self.location.y = y
 		self.location.z = z
@@ -122,11 +131,19 @@ class Matrix3D:
 	
 	# ---------------------------------------------------------------------------- matrix moving and transforming 
 	def move(self, distance):
-		#pdf - move a distance by multiplying matrix values
-		#   movement is along x axis (d, 0, 0, 1);
+		# move a distance by multiplying matrix values
+		# movement is along x axis (d, 0, 0, 1);
 		self.location.x = self.location.x + distance * self.a0
 		self.location.y = self.location.y + distance * self.b0
 		self.location.z = self.location.z + distance * self.c0
+	
+	def calculateMove(self, distance):
+		#pdf - move a distance by multiplying matrix values
+		#   movement is along x axis (d, 0, 0, 1);
+		x = self.location.x + distance * self.a0
+		y = self.location.y + distance * self.b0
+		z = self.location.z + distance * self.c0
+		return Point3D(x,y,z)
 	
 	# transform the point, including offsetting it by the current location
 	#Alters the point's contents
@@ -140,6 +157,9 @@ class Matrix3D:
 		
 	def convertAngleFromDegreesToRadians(self, angle_degrees):
 		return 2.0 * pi * angle_degrees / 360.0
+	
+	def locationAsTuple(self):
+		return (self.location.x, self.location.y, self.location.z)
 		
 	# ---------------------------------------------------------------------------------- matrix rotating 
 	def rotateX(self, angle_degrees):
@@ -257,4 +277,5 @@ class Matrix3D:
 		except:
 			result = 0
 		return result
+	
 	

@@ -74,17 +74,14 @@ else:
 			for k in range(GROUND_LEVEL+1):
 				minerals[(i,j,k)] = 1.0
 
-def locationIsInUse(location):
-	return len(space[location]) > 0
-
 def blocksOccupiedAboveLocation(location, treePart):
-	x = location[0]
-	y = location[1]
-	z = location[2]
+	x = location.x
+	y = location.y
+	z = location.z
 	result = 0
 	zAbove = min(SIZE_OF_SPACE_XY-1, z+1)
 	while zAbove <= SIZE_OF_SPACE_XY-1:
-		locationAbove = (x, y, zAbove)
+		locationAbove = Point3D(x, y, zAbove)
 		if space.has_key(locationAbove) and space[locationAbove] and not (space[locationAbove][0] is treePart):
 			result += 1
 		zAbove += 1
@@ -124,7 +121,7 @@ def seekBetterLocation(location, root, seekRadius):
 						waterAndMinerals = 0
 					if waterAndMinerals > bestWaterAndMinerals:
 						bestWaterAndMinerals = waterAndMinerals
-						bestLocation = (i,j,k)
+						bestLocation = Point3D(i,j,k)
 	else:
 		bestSun = sun[(x,y)]
 		for i in range(startX, stopX):
@@ -132,16 +129,16 @@ def seekBetterLocation(location, root, seekRadius):
 				sunHere = sun[(i,j)]
 				if sunHere > bestSun:
 					bestSun = sunHere
-					bestLocation = (i,j, z)
+					bestLocation = Point3D(i,j, z)
 	if bestLocation:
 		return bestLocation
 	else:
 		return location
 	
 def waterOrMineralsInRegion(waterOrMinerals, location, radius):
-	x = location[0]
-	y = location[1]
-	z = location[2]
+	x = int(round(location.x))
+	y = int(round(location.y))
+	z = int(round(location.z))
 	startX = max(0, min(SIZE_OF_SPACE_XY-1, x-radius))
 	stopX = max(0, min(SIZE_OF_SPACE_XY-1, x+radius))
 	startY = max(0, min(SIZE_OF_SPACE_XY-1, y-radius))
@@ -166,12 +163,6 @@ def releaseLocation(location, treePart):
 	if treePart in space[location]:
 		space[location].remove(treePart)
 	
-def clearSpace():
-	for i in range(SIZE_OF_SPACE_XY):
-		for j in range(SIZE_OF_SPACE_XY):
-			for k in range (SIZE_OF_SPACE_XY):
-				space[(i,j,k)] = []
-
 def colorForLocation(location):
 	if space.has_key(location):
 		if space.has_key(location) and space[location]:
@@ -250,7 +241,7 @@ def drawSpace(age, outputFolder, drawTrees=True, drawSun=False, drawWater=False,
 		for k in range (SIZE_OF_SPACE_Z): # order by height
 			for i in range(SIZE_OF_SPACE_XY):
 				for j in range(SIZE_OF_SPACE_XY):
-					color = colorForLocation((i,j,k))
+					color = colorForLocation(Point3D(i,j,k))
 					if color:
 						xValues.append(i)
 						yValues.append(j)

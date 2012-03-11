@@ -55,7 +55,7 @@ class TreePart():
 		self.water = water
 		self.minerals = minerals
 		
-		self.matrix = matrix.makeCopy() #cfk check if need this
+		self.matrix = matrix # creator should make copy
 		self.blocks = []
 		
 	def nextDay(self):
@@ -77,14 +77,17 @@ class TreePart():
 		self.blocks = []
 		
 	def claimStartBlock(self):
-		self.blocks = [self.matrix.location]
-		claimLocation(self.matrix.location, self)
+		roundedLocation = self.matrix.location.rounded()
+		self.blocks = [roundedLocation]
+		claimLocation(roundedLocation, self)
+		#print self.__class__.__name__, 'claiming', self.matrix.location
 		
 	def claimSeriesOfBlocks(self, locations):
 		for location in locations:
-			if not location in self.blocks:
-				self.blocks.append(location)
-				claimLocation(location, self)
+			roundedLocation = location.rounded()
+			if not roundedLocation in self.blocks:
+				self.blocks.append(roundedLocation)
+				claimLocation(roundedLocation, self)
 				
 	def describe(self, outputFile, indentCounter):
 		outputFile.write(INDENT * indentCounter + ' %s: \n' % self.__class__.__name__)
@@ -99,11 +102,11 @@ class TreePart():
 # -------------------------------------------------------------------------------------------
 class Meristem(TreePart):
 # -------------------------------------------------------------------------------------------
-	def __init__(self, tree, parent, root, branchNestingLevel, numberOnInternode, location, forward, side, apical=False, biomass=0, water=0, minerals=0):
-		TreePart.__init__(self, tree, parent, location, forward, side, biomass=START_MERISTEM_BIOMASS[root], water=0, minerals=0)
+	def __init__(self, tree, parent, root, branchNestingLevel, numberOnParentInternode, matrix, apical=False, biomass=0, water=0, minerals=0):
+		TreePart.__init__(self, tree, parent, matrix, biomass=START_MERISTEM_BIOMASS[root], water=0, minerals=0)
 		self.apical = apical
 		self.root = root
-		self.numberOnInternode = numberOnInternode
+		self.numberOnParentInternode = numberOnParentInternode
 		self.branchNestingLevel = branchNestingLevel
 		self.active = False
 		
@@ -112,25 +115,14 @@ class Meristem(TreePart):
 			self.reproduce()
 		
 	def buildInternode(self, firstOnTree=False):
+		newMatrix = self.matrix.makeCopy()
 		if self.apical:
-			newSide = rotateAround(self.forward, self.side, 1)
-			if self.parent:
-				parentBranchForward = self.parent.parentBranchForward
-			else: # parent may be first on plant
-				if self.root:
-					parentBranchForward = "down"
-				else:
-					parentBranchForward = "up"
 			newBranchNestingLevel = self.branchNestingLevel
 		else: 
-			newSide = self.side
-			parentBranchForward = self.parent.forward
 			newBranchNestingLevel = self.branchNestingLevel + 1
-			#print self.branchNestingLevel, newBranchNestingLevel
 		firstOnBranch = firstOnTree or not self.apical
-		newInternode = Internode(self.tree, self.parent, self.root, newBranchNestingLevel, self.matrix.location, self.forward, newSide, 
-								firstOnTree=firstOnTree, firstOnBranch=firstOnBranch, parentBranchForward=parentBranchForward,
-								iAmABranchOffMyParent=not self.apical)
+		newInternode = Internode(self.tree, self.parent, self.root, newBranchNestingLevel, newMatrix, self.numberOnParentInternode,
+								firstOnTree=firstOnTree, firstOnBranch=firstOnBranch, iAmABranchOffMyParent=not self.apical)
 		if self.parent:
 			if self.apical:
 				self.parent.addChildInternode(newInternode)
@@ -139,14 +131,8 @@ class Meristem(TreePart):
 		return newInternode
 	
 	def buildFlowerCluster(self):
-		if self.apical:
-			newSide = rotateAround(self.forward, self.side, 1)
-		else:   
-			if self.parent:
-				newSide = self.side
-			else:
-				newSide = self.tree.firstInternodeSideDirection
-		newFlowerCluster = FlowerCluster(self.tree, self.parent, self.numberOnInternode, self.apical, self.matrix.location, self.forward, newSide)
+		newMatrix = self.matrix.makeCopy()
+		newFlowerCluster = FlowerCluster(self.tree, self.parent, self.numberOnParentInternode, self.apical, newMatrix)
 		if self.parent:
 			self.parent.addFlowerCluster(newFlowerCluster)
 		
@@ -182,10 +168,9 @@ class Meristem(TreePart):
 						
 	def nextDay_Drawing(self):
 		if self.apical:
-			location = self.parent.locationForApicalMeristem()
+			self.matrix = self.parent.matrixForApicalMeristemOrChildInternode(0)
 		else:
-			location, forward, side = self.parent.locationAndDirectionsForAxillaryMeristem(self.numberOnInternode)
-		self.matrix.location = location
+			self.matrix = self.parent.matrixForAxillaryMeristemOrBranchInternode(self.numberOnParentInternode, 0)
 		if DRAW_MERISTEMS:
 			self.claimStartBlock()
 		
@@ -242,8 +227,8 @@ class Meristem(TreePart):
 # -------------------------------------------------------------------------------------------
 class Internode(TreePart):
 # -------------------------------------------------------------------------------------------
-	def __init__(self, tree, parent, root, branchNestingLevel, location, forward, side, firstOnTree, firstOnBranch, parentBranchForward, iAmABranchOffMyParent):
-		TreePart.__init__(self, tree, parent, location, forward, side, biomass=START_INTERNODE_BIOMASS[root], water=0, minerals=0)
+	def __init__(self, tree, parent, root, branchNestingLevel, matrix, numberOnParentInternode, firstOnTree, firstOnBranch, iAmABranchOffMyParent):
+		TreePart.__init__(self, tree, parent, matrix, biomass=START_INTERNODE_BIOMASS[root], water=0, minerals=0)
 		self.child = None
 		self.branches = []
 		self.flowerClusters = []
@@ -254,8 +239,8 @@ class Internode(TreePart):
 		self.firstOnBranch = firstOnBranch
 		self.branchNestingLevel = branchNestingLevel
 		
-		self.parentBranchForward = parentBranchForward
 		self.iAmABranchOffMyParent = iAmABranchOffMyParent
+		self.numberOnParentInternode = numberOnParentInternode
 		
 		self.tree.numInternodesCreated += 1
 		self.randomSway = random.randrange(RANDOM_INTERNODE_SWAY[self.root]) - RANDOM_INTERNODE_SWAY[self.root] // 2
@@ -273,70 +258,80 @@ class Internode(TreePart):
 		self.buildMeristems()
 		
 	def buildMeristems(self):
-		location = self.matrix.locationForApicalMeristem()
-		self.apicalMeristem = Meristem(self.tree, self, self.root, self.branchNestingLevel, 0, location, self.forward, self.side, apical=True)
+		newApicalMatrix = self.matrixForApicalMeristemOrChildInternode(0)
+		self.apicalMeristem = Meristem(self.tree, self, self.root, self.branchNestingLevel, 0, newApicalMatrix, apical=True)
 		self.axillaryMeristems = []
-		for i in range(AXILLARY_MERISTEMS_PER_INTERNODE[self.root]):
-			location, forward, side = self.matrix.locationAndDirectionsForAxillaryMeristem(i)
-			newAxillaryMeristem = Meristem(self.tree, self, self.root, self.branchNestingLevel, i, location, forward, side, apical=False)
+		for meristemNumber in range(AXILLARY_MERISTEMS_PER_INTERNODE[self.root]):
+			newAxillaryMatrix = self.matrixForAxillaryMeristemOrBranchInternode(meristemNumber, 0)
+			newAxillaryMeristem = Meristem(self.tree, self, self.root, self.branchNestingLevel, meristemNumber, newAxillaryMatrix, apical=False)
 			self.axillaryMeristems.append(newAxillaryMeristem)
 		
 	def buildLeafClusters(self):
 		self.leafClusters = []
-		for i in range(AXILLARY_MERISTEMS_PER_INTERNODE[self.root]):
-			location, forward, side = self.matrix.locationAndDirectionsForLeafCluster(i)
-			newLeafCluster = LeafCluster(self.tree, self, i, location, forward, side)
+		for leafClusterNumber in range(AXILLARY_MERISTEMS_PER_INTERNODE[self.root]):
+			newLeafMatrix = self.matrixForLeafCluster(leafClusterNumber, 0)
+			newLeafCluster = LeafCluster(self.tree, self, leafClusterNumber, newLeafMatrix)
 			self.leafClusters.append(newLeafCluster)
 			
-	def locationForApicalMeristem(self):
-		aboveGround = not self.root
-		locationOneFurther = displacementInDirection(self.endLocation, self.forward, 1, aboveGround)
-		return locationOneFurther
+	def matrixForApicalMeristemOrChildInternode(self, randomSway):
+		newMatrix = self.matrix.makeCopy()
+		newMatrix.move(self.length)
+		newMatrix.move(1.0)
+		newMatrix.rotateX(90)
+		newMatrix.rotateZ(randomSway)
+		return newMatrix
 	
-	def locationAndDirectionsForAxillaryMeristem(self, meristemNumber):
-		aboveGround = not self.root
-		if AXILLARY_MERISTEMS_PER_INTERNODE[self.root] == 1:
-			meristemForward = self.side
-		elif AXILLARY_MERISTEMS_PER_INTERNODE[self.root] == 2:
-			if meristemNumber == 1:
-				meristemForward = self.side
-			else:
-				meristemForward = rotateAround(self.forward, self.side, 2)
+	def matrixForAxillaryMeristemOrBranchInternode(self, numberOnParentInternode, randomSway):
+		if self.branchNestingLevel <= 1:
+			sideAngle = ANGLE_BETWEEN_STEM_AND_BRANCH_OFF_TRUNK[self.root]
 		else:
-			if meristemNumber == 1:
-				meristemForward = self.side
-			else:
-				meristemForward = rotateAround(self.forward, self.side, meristemNumber)
-		location = displacementInDirection(self.endLocation, meristemForward, self.width//2, aboveGround)
-		meristemSide = self.forward
-		return location, meristemForward, meristemSide
-		
-	def locationAndDirectionsForLeafCluster(self, leafClusterNumber):
-		locationOneDownFromEnd = displacementInDirection(self.endLocation, self.forward, -1)
-		if AXILLARY_MERISTEMS_PER_INTERNODE[self.root] == 1:
-			leafClusterForward = self.side
-		elif AXILLARY_MERISTEMS_PER_INTERNODE[self.root] == 2:
-			if leafClusterNumber == 1:
-				leafClusterForward = self.side
-			else:
-				leafClusterForward = rotateAround(self.forward, self.side, 2)
-		else:
-			if leafClusterNumber == 1:
-				leafClusterForward = self.side
-			else:
-				leafClusterForward = rotateAround(self.forward, self.side, leafClusterNumber)
-		location = displacementInDirection(locationOneDownFromEnd, leafClusterForward, self.width//2)
-		leafClusterSide = self.forward
-		# looks strange if leafClusters don't point to the side
-		# cfk keep this?
-		if leafClusterSide in ["up", "down"]:
-			leafClusterSide = rotateAround(leafClusterForward, leafClusterSide, 1)
-		return location, leafClusterForward, leafClusterSide
+			sideAngle = ANGLE_BETWEEN_STEM_AND_BRANCH_NOT_OFF_TRUNK[self.root]
+		sideAngle += randomSway
+		return self.matrixForPartAttachedToInternodeEnd(numberOnParentInternode, -1.0, sideAngle)
 	
-	def locationForChildInternode(self):
-		aboveGround = not self.root
-		locationOneFurther = displacementInDirection(self.endLocation, self.forward, 1, aboveGround)
-		return locationOneFurther
+	def matrixForLeafCluster(self, numberOnParentInternode, randomSway):
+		sideAngle = LEAF_CLUSTER_ANGLE_WITH_STEM
+		sideAngle += randomSway
+		return self.matrixForPartAttachedToInternodeEnd(numberOnParentInternode, -2.0, sideAngle)
+	
+	def matrixForFlowerCluster(self, numberOnParentInternode, randomSway):
+		sideAngle = FLOWER_CLUSTER_ANGLE_WITH_STEM
+		sideAngle += randomSway
+		return self.matrixForPartAttachedToInternodeEnd(numberOnParentInternode, -2.0, sideAngle)
+	
+	def matrixForFruitCluster(self, numberOnParentInternode, randomSway):
+		sideAngle = FRUIT_CLUSTER_ANGLE_WITH_STEM
+		sideAngle += randomSway
+		return self.matrixForPartAttachedToInternodeEnd(numberOnParentInternode, -2.0, sideAngle)
+	
+	def matrixForPartAttachedToInternodeEnd(self, numberOnParentInternode, pullBack, sideAngle):
+		newMatrix = self.matrix.makeCopy()
+		#print 'at internode start', newMatrix.location
+		newMatrix.move(self.length)
+		#print self.length
+		newMatrix.move(pullBack)
+		#print '... at internode end', newMatrix.location
+		if AXILLARY_MERISTEMS_PER_INTERNODE[self.root] == 1:
+			xRotation = 0
+		elif AXILLARY_MERISTEMS_PER_INTERNODE[self.root] == 2:
+			if numberOnParentInternode == 1:
+				xRotation = 0
+			else:
+				xRotation = 180
+		else:
+			if numberOnParentInternode == 1:
+				xRotation = 0
+			else:
+				xRotation = 90 * numberOnParentInternode
+		if xRotation > 0:
+			newMatrix.rotateX(xRotation)
+		newMatrix.rotateZ(sideAngle)
+		if self.width == 1:
+			newMatrix.move(1.0)
+		else:
+			newMatrix.move(self.width / 2)
+		#print '... at side ready to place part', newMatrix.location
+		return newMatrix
 		
 	def addChildInternode(self, internode):
 		self.child = internode
@@ -503,50 +498,26 @@ class Internode(TreePart):
 		
 	def nextDay_Drawing(self):
 		aboveGround = not self.root
-		if not self.iAmABranchOffMyParent:
-			if self.parent:
-				self.matrix.location = self.parent.locationForChildInternode()
-		directionOfParentBranch = self.findDirectionOfParentBranch()
-		if self.branchNestingLevel <= 1:
-			angleInDegrees = ANGLE_BETWEEN_STEM_AND_BRANCH_OFF_TRUNK[self.root]
+		if self.iAmABranchOffMyParent:
+			self.matrix = self.parent.matrixForAxillaryMeristemOrBranchInternode(self.numberOnParentInternode, self.randomSway)
 		else:
-			angleInDegrees = ANGLE_BETWEEN_STEM_AND_BRANCH_NOT_OFF_TRUNK[self.root]
-			
-		# location, length, angleInDegrees, swayInDegrees, forward, parentForward, side, aboveGround=True
-		self.endLocation = endPointOfAngledLine(self.matrix.location, self.length, 
-					angleInDegrees, self.randomSway, self.forward, directionOfParentBranch, aboveGround)
-		#if aboveGround and self.branchNestingLevel >= 2:
-		#	print self.branchNestingLevel, self.matrix.location, self.endLocation, self.length, angleInDegrees, self.randomSway, self.forward, self.parentBranchForward, aboveGround
+			if self.parent:
+				self.matrix = self.parent.matrixForApicalMeristemOrChildInternode(self.randomSway)
+		self.endLocation = self.matrix.calculateMove(self.length)
+		#print self.matrix.location, self.endLocation
 		if not self.woody and INTERNODES_SEEK_SUN_OR_WATER_AND_MINERALS_IN_RADIUS[self.root] > 0:
 			self.endLocation = seekBetterLocation(self.endLocation, self.root, INTERNODES_SEEK_SUN_OR_WATER_AND_MINERALS_IN_RADIUS[self.root])
 		if (self.root and DRAW_ROOTS) or (not self.root and DRAW_STEMS):
 			locationsBetween = locationsBetweenTwoPoints(self.matrix.location, self.endLocation, self.length)
 			self.claimStartBlock()
 			self.claimSeriesOfBlocks(locationsBetween)
+			"""
 			if self.width > 1:
 				for location in locationsBetween:
-					circleLocations = circleAroundPoint(location, self.width, self.forward, self.side, aboveGround)
+					circleLocations = circleAroundPoint(location, self.width, self.matrix, aboveGround)
 					self.claimSeriesOfBlocks(circleLocations)
-					
-	def findDirectionOfParentBranch(self):
-		internode = self.parent
-		if not internode:
-			if self.root:
-				return "down"
-			else:
-				return "up"
-		while internode:
-			if internode.firstOnBranch:
-				if internode.parent:
-					return internode.parent.forward
-				else:
-					if self.root:
-						return "down"
-					else:
-						return "up"
-			else:
-				internode = internode.parent
-			
+			"""
+								
 	def nextDay_SignalPropagation(self):
 		sendSignalTo = []
 		if not self.root:
@@ -615,9 +586,9 @@ class Internode(TreePart):
 # -------------------------------------------------------------------------------------------
 class LeafCluster(TreePart):
 # -------------------------------------------------------------------------------------------
-	def __init__(self, tree, parent, numberOnInternode, location, forward, side):
-		TreePart.__init__(self, tree, parent, location, forward, side, biomass=START_LEAF_CLUSTER_BIOMASS, water=0, minerals=0)
-		self.numberOnInternode = numberOnInternode
+	def __init__(self, tree, parent, numberOnParentInternode, matrix):
+		TreePart.__init__(self, tree, parent, matrix, biomass=START_LEAF_CLUSTER_BIOMASS, water=0, minerals=0)
+		self.numberOnParentInternode = numberOnParentInternode
 		self.length = LEAF_CLUSTER_LENGTH_AT_CREATION
 		self.randomSway = random.randrange(RANDOM_LEAF_CLUSTER_SWAY) - RANDOM_LEAF_CLUSTER_SWAY // 2
 		self.newBiomass = 0
@@ -628,7 +599,13 @@ class LeafCluster(TreePart):
 				
 	def nextDay_Uptake(self):
 		if self.alive:
-			self.lowSunStress = 1.0 - sun[(self.matrix.location[0], self.matrix.location[1])]
+			x = int(round(self.matrix.location.x))
+			y = int(round(self.matrix.location.y))
+			# cfk fix later
+			if sun.has_key((x,y)):
+				self.lowSunStress = 1.0 - sun[(x,y)]
+			else:
+				self.lowSunStress = 0.0
 			numBlocksShadingMe = blocksOccupiedAboveLocation(self.matrix.location, self)
 			self.shadeStress = max(0.0, min(1.0, 1.0 * numBlocksShadingMe / NUM_BLOCKS_ABOVE_FOR_MAX_SHADE_STRESS))
 			self.lowWaterStress = 1.0 - self.water / WATER_FOR_OPTIMAL_PHOTOSYNTHESIS
@@ -667,8 +644,6 @@ class LeafCluster(TreePart):
 			self.biomass -= biomassTakenByParent
 	
 	def nextDay_Growth(self):
-		location, direction, side = self.parent.locationAndDirectionsForLeafCluster(self.numberOnInternode)
-		self.matrix.location = location
 		if self.alive:
 			proportion = self.biomass / OPTIMAL_LEAF_CLUSTER_BIOMASS
 			self.length = int(round(proportion * LEAF_CLUSTER_LENGTH_AT_FULL_SIZE))
@@ -676,14 +651,32 @@ class LeafCluster(TreePart):
 		
 	def nextDay_Drawing(self):
 		if DRAW_LEAF_CLUSTERS:
+			self.matrix = self.parent.matrixForLeafCluster(self.numberOnParentInternode, self.randomSway)
 			if self.length > 1:
-				spineEndLocation = endPointOfAngledLine(self.matrix.location, self.length, 
-							LEAF_CLUSTER_ANGLE_WITH_STEM, self.randomSway, self.forward, self.parent.forward)
+				spineEndLocation = self.matrix.calculateMove(self.length)
 				spine = locationsBetweenTwoPoints(self.matrix.location, spineEndLocation, self.length)
 				sizeProportion = 1.0 * self.length / LEAF_CLUSTER_LENGTH_AT_FULL_SIZE
+				lengthIndex = 0
+				wings = []
+				pattern = LEAF_CLUSTER_SHAPE_PATTERN
+				for location in spine:
+					shapeLookupIndex = lengthIndex % len(pattern)
+					sideExtent = int(pattern[shapeLookupIndex])
+					sideExtentConsideringProportion = max(0, min(sideExtent, int(round(sizeProportion * sideExtent))))
+					tempMatrix = self.matrix.makeCopy()
+					tempMatrix.setLocation(location.x, location.y, location.z)
+					tempMatrix.rotateY(90)
+					for sideNumber in range(LEAF_CLUSTER_SIDES):
+						tempMatrix.rotateZ(360.0 / LEAF_CLUSTER_SIDES)
+						sideEndLocation = tempMatrix.calculateMove(sideExtentConsideringProportion)
+						oneSidePiece = locationsBetweenTwoPoints(location, sideEndLocation, sideExtentConsideringProportion)
+						wings.extend(oneSidePiece)					
+					
+					lengthIndex += 1
+				
 				# spine, pattern, angle, sides, sizeProportion, forward, side
-				wings = locationsForShapeAroundSpine(spine, LEAF_CLUSTER_SHAPE_PATTERN, LEAF_CLUSTER_SHAPE_ANGLE, LEAF_CLUSTER_SIDES, 
-							sizeProportion, self.forward, self.side)
+				#wings = locationsForShapeAroundSpine(spine, LEAF_CLUSTER_SHAPE_PATTERN, LEAF_CLUSTER_SHAPE_ANGLE, LEAF_CLUSTER_SIDES, 
+				#			sizeProportion, self.forward, self.side)
 				self.claimStartBlock()
 				self.claimSeriesOfBlocks(spine)
 				self.claimSeriesOfBlocks(wings)
@@ -726,15 +719,15 @@ class LeafCluster(TreePart):
 # -------------------------------------------------------------------------------------------
 class FlowerCluster(TreePart):
 # -------------------------------------------------------------------------------------------
-	def __init__(self, tree, parent, numberOnInternode, apical, location, forward, side):
-		TreePart.__init__(self, tree, parent, location, forward, side, biomass=START_FLOWER_CLUSTER_BIOMASS, water=0, minerals=0)
-		self.numberOnInternode = numberOnInternode
+	def __init__(self, tree, parent, numberOnParentInternode, apical, matrix):
+		TreePart.__init__(self, tree, parent, matrix, biomass=START_FLOWER_CLUSTER_BIOMASS, water=0, minerals=0)
+		self.numberOnParentInternode = numberOnParentInternode
 		self.apical = apical
 		self.length = FLOWER_CLUSTER_LENGTH_AT_CREATION
 		self.randomSway = random.randrange(RANDOM_FLOWER_CLUSTER_SWAY) - RANDOM_FLOWER_CLUSTER_SWAY // 2
 		
 	def buildFruit(self):
-		newFruitCluster = FruitCluster(self.tree, self.parent, self.numberOnInternode, self.matrix.location, self.forward, self.side)
+		newFruitCluster = FruitCluster(self.tree, self.parent, self.numberOnParentInternode, self.matrix)
 		self.parent.removeFlowerClusterThatMadeFruitCluster(self)
 		self.parent.addFruitCluster(newFruitCluster)
 				
@@ -755,25 +748,24 @@ class FlowerCluster(TreePart):
 		if self.age >= MINIMUM_DAYS_FLOWER_APPEARS_EVEN_WITH_OPTIMAL_BIOMASS and self.biomass >= OPTIMAL_FLOWER_CLUSTER_BIOMASS:
 			self.buildFruit()
 		else:
-			location, direction, side = self.parent.locationAndDirectionsForAxillaryMeristem(self.numberOnInternode)
-			self.matrix.location = location
 			proportion = self.biomass / OPTIMAL_FLOWER_CLUSTER_BIOMASS
 			self.length = int(round(proportion * FLOWER_CLUSTER_LENGTH_AT_FULL_SIZE))
 			self.length = max(FLOWER_CLUSTER_LENGTH_AT_CREATION, min(FLOWER_CLUSTER_LENGTH_AT_FULL_SIZE, self.length))
 		
 	def nextDay_Drawing(self):
 		if DRAW_FLOWER_CLUSTERS:
+			# cfk remember to put random sway back
+			self.matrix = self.parent.matrixForFlowerCluster(self.numberOnParentInternode, self.randomSway)
 			if self.length > 1:
-				spineEndLocation = endPointOfAngledLine(self.matrix.location, self.length, 
-							FLOWER_CLUSTER_ANGLE_WITH_STEM, self.randomSway, self.forward, self.parent.forward)
+				spineEndLocation = self.matrix.calculateMove(self.length)
 				spine = locationsBetweenTwoPoints(self.matrix.location, spineEndLocation, self.length)
 				sizeProportion = self.biomass / OPTIMAL_FLOWER_CLUSTER_BIOMASS
 				# # spine, pattern, angle, sides, sizeProportion, forward, side
-				wings = locationsForShapeAroundSpine(spine, FLOWER_CLUSTER_SHAPE_PATTERN, FLOWER_CLUSTER_SHAPE_ANGLE, FLOWER_CLUSTER_SIDES, 
-							sizeProportion, self.forward, self.side)
+				#wings = locationsForShapeAroundSpine(spine, FLOWER_CLUSTER_SHAPE_PATTERN, FLOWER_CLUSTER_SHAPE_ANGLE, FLOWER_CLUSTER_SIDES, 
+				#			sizeProportion, self.forward, self.side)
 				self.claimStartBlock()
 				self.claimSeriesOfBlocks(spine)
-				self.claimSeriesOfBlocks(wings)
+				#self.claimSeriesOfBlocks(wings)
 			else:
 				self.claimStartBlock()
 
@@ -792,9 +784,9 @@ class FlowerCluster(TreePart):
 # -------------------------------------------------------------------------------------------
 class FruitCluster(TreePart):
 # -------------------------------------------------------------------------------------------
-	def __init__(self, tree, parent, numberOnInternode, location, forward, side):
-		TreePart.__init__(self, tree, parent, location, forward, side, biomass=START_FRUIT_CLUSTER_BIOMASS, water=0, minerals=0)
-		self.numberOnInternode = numberOnInternode
+	def __init__(self, tree, parent, numberOnParentInternode, matrix):
+		TreePart.__init__(self, tree, parent, matrix, biomass=START_FRUIT_CLUSTER_BIOMASS, water=0, minerals=0)
+		self.numberOnParentInternode = numberOnParentInternode
 		self.length = FRUIT_CLUSTER_LENGTH_AT_CREATION
 		self.randomSway = random.randrange(RANDOM_FRUIT_CLUSTER_SWAY) - RANDOM_FRUIT_CLUSTER_SWAY // 2
 		
@@ -811,25 +803,23 @@ class FruitCluster(TreePart):
 		pass
 	
 	def nextDay_Growth(self):
-		location, direction, side = self.parent.locationAndDirectionsForAxillaryMeristem(self.numberOnInternode)
-		self.matrix.location = location
 		proportion = self.biomass / OPTIMAL_FRUIT_CLUSTER_BIOMASS
 		self.length = int(round(proportion * FRUIT_CLUSTER_LENGTH_AT_FULL_SIZE))
 		self.length = max(FRUIT_CLUSTER_LENGTH_AT_CREATION, min(FRUIT_CLUSTER_LENGTH_AT_FULL_SIZE, self.length))
 		
 	def nextDay_Drawing(self):
 		if DRAW_FRUIT_CLUSTERS:
+			self.matrix = self.parent.matrixForFruitCluster(self.numberOnParentInternode, self.randomSway)
 			if self.length > 1:
-				spineEndLocation = endPointOfAngledLine(self.matrix.location, self.length, 
-							FRUIT_CLUSTER_ANGLE_WITH_STEM, self.randomSway, self.forward, self.parent.forward)
+				spineEndLocation = self.matrix.calculateMove(self.length)
 				spine = locationsBetweenTwoPoints(self.matrix.location, spineEndLocation, self.length)
 				sizeProportion = 1.0 * self.length / FRUIT_CLUSTER_LENGTH_AT_FULL_SIZE
 				# # spine, pattern, angle, sides, sizeProportion, forward, side
-				wings = locationsForShapeAroundSpine(spine, FRUIT_CLUSTER_SHAPE_PATTERN, FRUIT_CLUSTER_SHAPE_ANGLE, FRUIT_CLUSTER_SIDES, 
-							sizeProportion, self.forward, self.side)
-				self.claimStartBlock()
-				self.claimSeriesOfBlocks(spine)
-				self.claimSeriesOfBlocks(wings)
+				#wings = locationsForShapeAroundSpine(spine, FRUIT_CLUSTER_SHAPE_PATTERN, FRUIT_CLUSTER_SHAPE_ANGLE, FRUIT_CLUSTER_SIDES, 
+				#			sizeProportion, self.forward, self.side)
+				#self.claimStartBlock()
+				#self.claimSeriesOfBlocks(spine)
+				#self.claimSeriesOfBlocks(wings)
 			else:
 				self.claimStartBlock()
 
@@ -852,10 +842,8 @@ class Tree():
 		self.age = 0
 		self.matrix = Matrix3D(0.0, 0.0, 0.0)
 		self.matrix.initializeAsUnitMatrix()
-		#self.matrix.setXYZ(x, y, z)
+		self.matrix.setLocation(x, y, z)
 		self.matrix.rotateY(90)
-		self.matrix.move(1.0)
-		print self.matrix.location
 		
 		self.numInternodesCreated = 0
 		self.numRootInternodesCreated = 0
@@ -867,9 +855,7 @@ class Tree():
 		
 		rootMatrix = self.matrix.makeCopy()
 		rootMatrix.rotateY(180)
-		print rootMatrix.location
 		rootMatrix.move(1.0)
-		print rootMatrix.location
 
 		#self.firstInternodeSideDirection = DIRECTIONS[random.randrange(4)] # only choose from NESW, not up or down - first 4 in list
 		#self.firstRootInternodeSideDirection = DIRECTIONS[random.randrange(4)]

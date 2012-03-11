@@ -13,6 +13,8 @@ matplotlib.use('TkAgg') # do this before importing pylab
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d
 
+from trees_turtle import Point3D
+
 from trees_parameters import *
 
 def cleanTextForFileName(fileName):
@@ -167,10 +169,10 @@ def locationsBetweenTwoPoints(firstLocation, secondLocation, length):
 	locations = []
 	for i in range(length):
 		proportion = 1.0 * i / length
-		x = 1.0 * firstLocation[0] + proportion * (secondLocation[0] - firstLocation[0])
-		y = 1.0 * firstLocation[1] + proportion * (secondLocation[1] - firstLocation[1])
-		z = 1.0 * firstLocation[2] + proportion * (secondLocation[2] - firstLocation[2])
-		locations.append((int(round(x)), int(round(y)), int(round(z))))
+		x = 1.0 * firstLocation.x + proportion * (secondLocation.x - firstLocation.x)
+		y = 1.0 * firstLocation.y + proportion * (secondLocation.y - firstLocation.y)
+		z = 1.0 * firstLocation.z + proportion * (secondLocation.z - firstLocation.z)
+		locations.append(Point3D(x,y,z))
 	locations.append(secondLocation) # no need to add first location, caller does that
 	return locations
 
