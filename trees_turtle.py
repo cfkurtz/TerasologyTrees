@@ -2,10 +2,13 @@ from math import sqrt, atan, sin, cos, pi
 
 # ---------------------------------------------------------------------------------- KfPoint3D 
 class Point3D:
-	def __init__(self):
-		self.x = 0.0
-		self.y = 0.0
-		self.z = 0.0
+	def __init__(self, x=0.0, y=0.0, z=0.0):
+		self.x = x
+		self.y = y
+		self.z = z
+		
+	def __str__(self):
+		return "Point3D(%s, %s, %s)" % (self.x, self.y, self.z)
 
 def Point3D_setXYZ(thePoint, aX, aY, aZ):
 	thePoint.x = aX
@@ -55,7 +58,7 @@ def Point3D_addPointToBoundsRect(boundsRect, aPoint):
 			boundsRect.Bottom = y
 
 class Matrix3D:
-	def __init__(self):
+	def __init__(self, x, y, z):
 		self.a0 = 0.0
 		self.a1 = 0.0
 		self.a2 = 0.0
@@ -65,12 +68,12 @@ class Matrix3D:
 		self.c0 = 0.0
 		self.c1 = 0.0
 		self.c2 = 0.0
-		self.position = Point3D()
+		self.location = Point3D(x, y, z)
 		
 	def __repr__(self):
 		return "KfMatrix: (%f %f %f) (%f %f %f) (%f %f %f)" %(self.a0, self.a1, self.a2, self.b0, self.b1, self.b2, self.c0, self.c1, self.c2)
 	
-	# ---------------------------------------------------------------------------------- *KfMatrix imitializing and copying 
+	# ---------------------------------------------------------------------------------- matrix initializing and copying 
 	def initializeAsUnitMatrix(self):
 		self.a0 = 1.0
 		self.a1 = 0.0
@@ -81,15 +84,17 @@ class Matrix3D:
 		self.c0 = 0.0
 		self.c1 = 0.0
 		self.c2 = 1.0
-		self.position.x = 0.0
-		self.position.y = 0.0
-		self.position.z = 0.0
+		self.location.x = 0.0
+		self.location.y = 0.0
+		self.location.z = 0.0
+		
+	def setXYZ(self, x, y, z):
+		self.location.x = x
+		self.location.y = y
+		self.location.z = z
 	
 	def makeCopy(self):
-		result = Matrix3D()
-		result.position.x = self.position.x
-		result.position.y = self.position.y
-		result.position.z = self.position.z
+		result = Matrix3D(self.location.x, self.location.y, self.location.z)
 		result.a0 = self.a0
 		result.a1 = self.a1
 		result.a2 = self.a2
@@ -102,9 +107,9 @@ class Matrix3D:
 		return result
 	
 	def copyTo(self, otherMatrix):
-		otherMatrix.position.x = self.position.x
-		otherMatrix.position.y = self.position.y
-		otherMatrix.position.z = self.position.z
+		otherMatrix.location.x = self.location.x
+		otherMatrix.location.y = self.location.y
+		otherMatrix.location.z = self.location.z
 		otherMatrix.a0 = self.a0
 		otherMatrix.a1 = self.a1
 		otherMatrix.a2 = self.a2
@@ -115,28 +120,28 @@ class Matrix3D:
 		otherMatrix.c1 = self.c1
 		otherMatrix.c2 = self.c2
 	
-	# ---------------------------------------------------------------------------- KfMatrix moving and transforming 
+	# ---------------------------------------------------------------------------- matrix moving and transforming 
 	def move(self, distance):
 		#pdf - move a distance by multiplying matrix values
 		#   movement is along x axis (d, 0, 0, 1);
-		self.position.x = self.position.x + distance * self.a0
-		self.position.y = self.position.y + distance * self.b0
-		self.position.z = self.position.z + distance * self.c0
+		self.location.x = self.location.x + distance * self.a0
+		self.location.y = self.location.y + distance * self.b0
+		self.location.z = self.location.z + distance * self.c0
 	
-	# transform the point, including offsetting it by the current position
+	# transform the point, including offsetting it by the current location
 	#Alters the point's contents
 	def transform(self, aPoint3D):
 		x = aPoint3D.x
 		y = aPoint3D.y
 		z = aPoint3D.z
-		aPoint3D.x = (x * self.a0) + (y * self.a1) + (z * self.a2) + self.position.x
-		aPoint3D.y = (x * self.b0) + (y * self.b1) + (z * self.b2) + self.position.y
-		aPoint3D.z = (x * self.c0) + (y * self.c1) + (z * self.c2) + self.position.z
+		aPoint3D.x = (x * self.a0) + (y * self.a1) + (z * self.a2) + self.location.x
+		aPoint3D.y = (x * self.b0) + (y * self.b1) + (z * self.b2) + self.location.y
+		aPoint3D.z = (x * self.c0) + (y * self.c1) + (z * self.c2) + self.location.z
 		
 	def convertAngleFromDegreesToRadians(self, angle_degrees):
-		return 2 * pi * angle_degrees / 360
+		return 2.0 * pi * angle_degrees / 360.0
 		
-	# ---------------------------------------------------------------------------------- KfMatrix rotating 
+	# ---------------------------------------------------------------------------------- matrix rotating 
 	def rotateX(self, angle_degrees):
 		angle_radians = self.convertAngleFromDegreesToRadians(angle_degrees)
 		cosAngle = cos(angle_radians)
