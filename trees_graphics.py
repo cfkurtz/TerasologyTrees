@@ -193,21 +193,29 @@ def circleAroundPoint(center, diameter, forward, side, aboveGround=True):
 		angle += angleStep
 	return locations
 				
-def endPointOfAngledLine(location, length, angleInDegrees, swayInDegrees, forward, parentForward, side, aboveGround=True):
+def endPointOfAngledLine(location, length, angleInDegrees, swayInDegrees, forward, parentForward, aboveGround=True):
 	# calculate which two dimensions to use the branching angle
 	# it goes between your parent branch's forward dimension and your forward dimension
 	# calculate the end position in those two dimensions only
 	forwardDimension = dimensionForDirection(forward)
 	parentForwardDimension = dimensionForDirection(parentForward)
 	
+	if forwardDimension == parentForwardDimension:
+		endLocation = displacementInDirection(location, forward, length, aboveGround)
+		return endLocation
+	
+	#print 'forwardDimension', forwardDimension, 'parentForwardDimension', parentForwardDimension 
+	
 	# calculate the angle to be applied to the two dimensions: the standard angle plus some random sway
 	angleInRadians = 1.0 * angleInDegrees * math.pi / 180.0 
-	swayInRadians = swayInDegrees * math.pi / 180.0
+	swayInRadians = 1.0 * swayInDegrees * math.pi / 180.0
 	angleInRadians += swayInRadians
 	
 	# calculate xy positions in whatever plane is being considered
 	movementInForwardDimension = length * math.sin(angleInRadians)
 	movementInParentForwardDimension = length * math.cos(angleInRadians)
+	
+	#print 'angleInRadians', angleInRadians, 'length', length, 'movementInForwardDimension', movementInForwardDimension, 'movementInParentForwardDimension', movementInParentForwardDimension
 	
 	# based on that calculation, set two of the three end point values
 	# note that newLocation has to be an array rather than a tuple because you can't set tuple values individually
@@ -265,7 +273,7 @@ def locationsForShapeAroundSpine(spine, pattern, angle, numSides, sizeProportion
 					sideDirection = rotateAround(forward, side, turning)
 					# location, length, angleInDegrees, swayInDegrees, forward, parentForward, side
 					sideEndLocation = endPointOfAngledLine(location, sideExtentConsideringProportion, 
-								angle, 0, sideDirection, forward, forward)
+								angle, 0, sideDirection, forward)
 					oneSidePiece = locationsBetweenTwoPoints(location, sideEndLocation, sideExtentConsideringProportion)
 					sides.extend(oneSidePiece)
 			lengthIndex += 1

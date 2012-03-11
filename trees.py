@@ -30,8 +30,7 @@ from trees_world import *
 # DONE put in root growth
 # DONE do water and nutrient uptake - water and nutrient grids, like sun grid
 # DONE add seeking behavior for internodes (stem and root)
-
-# put in flower and fruit clusters
+# DONE put in flower and fruit clusters
 
 # add limits on parameters (in comments)
 # do several parameter sets
@@ -43,6 +42,7 @@ from trees_world import *
 
 # -------------------------------------------------------------------------------------------
 class TreePart():
+# the TreePart is the superclass for all parts of the tree. only a few methods are common to all tree parts.
 # -------------------------------------------------------------------------------------------
 	def __init__(self, tree, parent, location, forward, side, biomass=0, water=0, minerals=0):
 		self.tree = tree
@@ -87,15 +87,25 @@ class TreePart():
 				self.blocks.append(location)
 				claimLocation(location, self)
 				
+	def describe(self, outputFile, indentCounter):
+		outputFile.write(INDENT * indentCounter + ' %s: \n' % self.__class__.__name__)
+		fields = self.__dict__
+		#fieldKeysSorted.sort()
+		for key in fields:
+			valueAsString = str(fields[key])
+			if not valueAsString.find("instance") >= 0:
+				outputFile.write(INDENT * (indentCounter+1) + key + ": " + valueAsString + "\n")
+		outputFile.write("\n")
+
 # -------------------------------------------------------------------------------------------
 class Meristem(TreePart):
 # -------------------------------------------------------------------------------------------
-	def __init__(self, tree, parent, root, numberOnInternode, location, forward, side, apical=False, biomass=0, water=0, minerals=0):
-		TreePart.__init__(self, tree, parent, location, forward, side, 
-						biomass=START_MERISTEM_BIOMASS[root], water=0, minerals=0)
+	def __init__(self, tree, parent, root, branchNestingLevel, numberOnInternode, location, forward, side, apical=False, biomass=0, water=0, minerals=0):
+		TreePart.__init__(self, tree, parent, location, forward, side, biomass=START_MERISTEM_BIOMASS[root], water=0, minerals=0)
 		self.apical = apical
 		self.root = root
 		self.numberOnInternode = numberOnInternode
+		self.branchNestingLevel = branchNestingLevel
 		self.active = False
 		
 		self.reproductive = False
@@ -107,25 +117,19 @@ class Meristem(TreePart):
 			newSide = rotateAround(self.forward, self.side, 1)
 			if self.parent:
 				parentBranchForward = self.parent.parentBranchForward
-			else:
+			else: # parent may be first on plant
 				if self.root:
 					parentBranchForward = "down"
 				else:
 					parentBranchForward = "up"
-		else:   
-			if self.parent:
-				newSide = self.side
-				parentBranchForward = self.parent.forward
-			else:
-				if self.root:
-					parentBranchForward = "down"
-					newSide = self.tree.firstRootInternodeSideDirection
-				else:
-					parentBranchForward = "up"
-					newSide = self.tree.firstInternodeSideDirection
+			newBranchNestingLevel = self.branchNestingLevel
+		else: 
+			newSide = self.side
+			parentBranchForward = self.parent.forward
+			newBranchNestingLevel = self.branchNestingLevel + 1
+			#print self.branchNestingLevel, newBranchNestingLevel
 		firstOnBranch = firstOnTree or not self.apical
-		
-		newInternode = Internode(self.tree, self.parent, self.root, self.location, self.forward, newSide, 
+		newInternode = Internode(self.tree, self.parent, self.root, newBranchNestingLevel, self.location, self.forward, newSide, 
 								firstOnTree=firstOnTree, firstOnBranch=firstOnBranch, parentBranchForward=parentBranchForward,
 								iAmABranchOffMyParent=not self.apical)
 		if self.parent:
@@ -191,7 +195,11 @@ class Meristem(TreePart):
 			if self.tree.numInternodesCreated <= MAX_NUM_INTERNODES_ON_TREE_EVER[self.root]:
 				distance = self.distanceOfParentFromBranchApex()
 				if distance > 0:
-					probability = BRANCHING_PROBABILITY[self.root] * distance / APICAL_DOMINANCE_EXTENDS_FOR[self.root]
+					if APICAL_DOMINANCE_EXTENDS_FOR[self.root] > 0:
+						distanceFactor = 1.0 * distance / APICAL_DOMINANCE_EXTENDS_FOR[self.root]
+					else:
+						distanceFactor = 1.0
+					probability = BRANCHING_PROBABILITY[self.root] * distanceFactor
 					probability = max(0.0, min(1.0, probability))
 					randomNumber = random.random() 
 					self.active = randomNumber < probability
@@ -231,26 +239,11 @@ class Meristem(TreePart):
 			#print probabilityIWillTurnReproductive, randomNumber
 			if randomNumber < probabilityIWillTurnReproductive:
 				self.reproductive = True
-	
-	def describe(self, outputFile, indentCounter=0):
-		if self.root:
-			rootOrNot = ' root '
-		else:
-			rootOrNot = ''
-		if self.apical:
-			apicalOrAxillary = ' apical '
-		else:
-			apicalOrAxillary = ' axillary '
-		outputFile.write(INDENT * indentCounter + rootOrNot + apicalOrAxillary + ' meristem: ' + ' alive ' + str(self.alive) + \
-			' biomass ' + str(self.biomass) + " water " + str(self.water) + " minerals " + str(self.minerals) + \
-			" location " + str(self.location) + " active " + str(self.active) + " reproductive " + str(self.reproductive) +
-			" forward " + self.forward + " side " + self.side)
-		outputFile.write("\n")
-		
+			
 # -------------------------------------------------------------------------------------------
 class Internode(TreePart):
 # -------------------------------------------------------------------------------------------
-	def __init__(self, tree, parent, root, location, forward, side, firstOnTree, firstOnBranch, parentBranchForward, iAmABranchOffMyParent):
+	def __init__(self, tree, parent, root, branchNestingLevel, location, forward, side, firstOnTree, firstOnBranch, parentBranchForward, iAmABranchOffMyParent):
 		TreePart.__init__(self, tree, parent, location, forward, side, biomass=START_INTERNODE_BIOMASS[root], water=0, minerals=0)
 		self.child = None
 		self.branches = []
@@ -260,6 +253,8 @@ class Internode(TreePart):
 		self.root = root
 		self.firstOnTree = firstOnTree
 		self.firstOnBranch = firstOnBranch
+		self.branchNestingLevel = branchNestingLevel
+		
 		self.parentBranchForward = parentBranchForward
 		self.iAmABranchOffMyParent = iAmABranchOffMyParent
 		
@@ -280,11 +275,11 @@ class Internode(TreePart):
 		
 	def buildMeristems(self):
 		location = self.locationForApicalMeristem()
-		self.apicalMeristem = Meristem(self.tree, self, self.root, 0, location, self.forward, self.side, apical=True)
+		self.apicalMeristem = Meristem(self.tree, self, self.root, self.branchNestingLevel, 0, location, self.forward, self.side, apical=True)
 		self.axillaryMeristems = []
 		for i in range(AXILLARY_MERISTEMS_PER_INTERNODE[self.root]):
 			location, forward, side = self.locationAndDirectionsForAxillaryMeristem(i)
-			newAxillaryMeristem = Meristem(self.tree, self, self.root, i, location, forward, side, apical=False)
+			newAxillaryMeristem = Meristem(self.tree, self, self.root, self.branchNestingLevel, i, location, forward, side, apical=False)
 			self.axillaryMeristems.append(newAxillaryMeristem)
 		
 	def buildLeafClusters(self):
@@ -427,13 +422,24 @@ class Internode(TreePart):
 				sendTo.die()
 	
 	def nextDay_Distribution(self):
-		# internode can still act as piping system even if it is dead
-		parts = self.gatherDistributees(BIOMASS_DISTRIBUTION_ORDER[self.root])
+		if self.tree.prevailingStressCondition == "no stress":
+			biomassDistributionOrder = BIOMASS_DISTRIBUTION_ORDER["no stress"][self.root]
+			spread = BIOMASS_DISTRIBUTION_SPREAD["no stress"][self.root]
+		elif self.tree.prevailingStressCondition in ["low sun", "shade"]:
+			biomassDistributionOrder = BIOMASS_DISTRIBUTION_ORDER["low sun or shade"][self.root]
+			spread = BIOMASS_DISTRIBUTION_SPREAD["low sun or shade"][self.root]
+		elif self.tree.prevailingStressCondition in ["water", "minerals"]:
+			biomassDistributionOrder = BIOMASS_DISTRIBUTION_ORDER["water or mineral stress"][self.root]
+			spread = BIOMASS_DISTRIBUTION_SPREAD["water or mineral stress"][self.root]
+		elif self.tree.prevailingStressCondition == "reproduction":
+			biomassDistributionOrder = BIOMASS_DISTRIBUTION_ORDER["reproduction"][self.root]
+			spread = BIOMASS_DISTRIBUTION_SPREAD["reproduction"][self.root]
+		parts = self.gatherDistributees(biomassDistributionOrder)
 		for part in parts:
 			if part:
 				extra = max(0, self.biomass - OPTIMAL_INTERNODE_BIOMASS[self.root] - BIOMASS_USED_BY_INTERNODE_PER_DAY[self.root])
 				if extra > 0:
-					toBeGivenAway = extra * BIOMASS_DISTRIBUTION_SPREAD_PERCENT[self.root] / 100.0
+					toBeGivenAway = extra * spread
 					taken = part.acceptBiomass(toBeGivenAway)
 					self.biomass -= taken
 		parts = self.gatherDistributees(WATER_DISTRIBUTION_ORDER[self.root])
@@ -441,7 +447,7 @@ class Internode(TreePart):
 			if part:
 				extra = self.water
 				if extra > 0:
-					toBeGivenAway = extra * WATER_DISTRIBUTION_SPREAD_PERCENT[self.root] / 100.0
+					toBeGivenAway = extra * WATER_DISTRIBUTION_SPREAD_PERCENT[self.root] 
 					taken = part.acceptWater(toBeGivenAway)
 					self.water -= taken
 		parts = self.gatherDistributees(MINERALS_DISTRIBUTION_ORDER[self.root])
@@ -449,20 +455,20 @@ class Internode(TreePart):
 			if part:
 				extra = self.minerals
 				if extra > 0:
-					toBeGivenAway = extra * MINERALS_DISTRIBUTION_SPREAD_PERCENT[self.root] / 100.0
+					toBeGivenAway = extra * MINERALS_DISTRIBUTION_SPREAD_PERCENT[self.root] 
 					taken = part.acceptMinerals(toBeGivenAway)
 					self.minerals -= taken
 				
 	def gatherDistributees(self, order):
 		distributees = []
 		for name in order:
-			if name == "leaf clusters":
+			if name == "leaves":
 				if not self.root:
 					distributees.extend(self.leafClusters)
-			elif name == "flower clusters":
+			elif name == "flowers":
 				if not self.root:
 					distributees.extend(self.flowerClusters)
-			elif name == "fruit clusters":
+			elif name == "fruits":
 				if not self.root:
 					distributees.extend(self.fruitClusters)
 			elif name == "apical meristems":
@@ -501,14 +507,19 @@ class Internode(TreePart):
 		if not self.iAmABranchOffMyParent:
 			if self.parent:
 				self.location = self.parent.locationForChildInternode()
-		# testing the parent branch forward is a kludgy way of trying to find out if you have branched
-		# off the main trunk without saving the information
-		# NOT USING - CFK FIX
-		angleInDegrees = ANGLE_BETWEEN_STEM_AND_BRANCH_NOT_OFF_TRUNK[self.root]
+		directionOfParentBranch = self.findDirectionOfParentBranch()
+		if self.branchNestingLevel <= 1:
+			angleInDegrees = ANGLE_BETWEEN_STEM_AND_BRANCH_OFF_TRUNK[self.root]
+		else:
+			angleInDegrees = ANGLE_BETWEEN_STEM_AND_BRANCH_NOT_OFF_TRUNK[self.root]
+			
+		# location, length, angleInDegrees, swayInDegrees, forward, parentForward, side, aboveGround=True
 		self.endLocation = endPointOfAngledLine(self.location, self.length, 
-					angleInDegrees, self.randomSway, self.forward, self.parentBranchForward, self.side, aboveGround)
-		if not self.woody and INTERNODES_SEEK_RADIUS[self.root] > 0:
-			self.endLocation = seekBetterLocation(self.endLocation, self.root, INTERNODES_SEEK_RADIUS[self.root])
+					angleInDegrees, self.randomSway, self.forward, directionOfParentBranch, aboveGround)
+		#if aboveGround and self.branchNestingLevel >= 2:
+		#	print self.branchNestingLevel, self.location, self.endLocation, self.length, angleInDegrees, self.randomSway, self.forward, self.parentBranchForward, aboveGround
+		if not self.woody and INTERNODES_SEEK_SUN_OR_WATER_AND_MINERALS_IN_RADIUS[self.root] > 0:
+			self.endLocation = seekBetterLocation(self.endLocation, self.root, INTERNODES_SEEK_SUN_OR_WATER_AND_MINERALS_IN_RADIUS[self.root])
 		if (self.root and DRAW_ROOTS) or (not self.root and DRAW_STEMS):
 			locationsBetween = locationsBetweenTwoPoints(self.location, self.endLocation, self.length)
 			self.claimStartBlock()
@@ -517,6 +528,25 @@ class Internode(TreePart):
 				for location in locationsBetween:
 					circleLocations = circleAroundPoint(location, self.width, self.forward, self.side, aboveGround)
 					self.claimSeriesOfBlocks(circleLocations)
+					
+	def findDirectionOfParentBranch(self):
+		internode = self.parent
+		if not internode:
+			if self.root:
+				return "down"
+			else:
+				return "up"
+		while internode:
+			if internode.firstOnBranch:
+				if internode.parent:
+					return internode.parent.forward
+				else:
+					if self.root:
+						return "down"
+					else:
+						return "up"
+			else:
+				internode = internode.parent
 			
 	def nextDay_SignalPropagation(self):
 		sendSignalTo = []
@@ -534,7 +564,6 @@ class Internode(TreePart):
 		
 	def reproduce(self):
 		if not self.root:
-			#print 'internode is sending on repro signal'
 			sendSignalTo = []
 			sendSignalTo.extend([self.apicalMeristem])
 			sendSignalTo.extend(self.axillaryMeristems)
@@ -543,19 +572,39 @@ class Internode(TreePart):
 			for sendTo in sendSignalTo:
 				if sendTo:
 					sendTo.reproduce()
+					
+	def sumUpStresses(self):
+		totalCount = 0
+		totalLowSunStress = 0
+		totalShadeStress = 0
+		totalLowWaterStress = 0
+		totalLowMineralStress = 0
+		sendSignalTo = []
+		if not self.root:
+			sendSignalTo.extend(self.leafClusters)
+		sendSignalTo.extend([self.child])
+		sendSignalTo.extend(self.branches)
+		for sendTo in sendSignalTo:
+			if sendTo:
+				count, lowSunStress, shadeStress, lowWaterStress, lowMineralStress = sendTo.sumUpStresses()
+				totalCount += count
+				totalLowSunStress += lowSunStress
+				totalShadeStress += shadeStress
+				totalLowWaterStress += lowWaterStress
+				totalLowMineralStress += lowMineralStress
+		return totalCount, totalLowSunStress, totalShadeStress, totalLowWaterStress, totalLowMineralStress
 		
 	def describe(self, outputFile, indentCounter=0):
-		if self.root:
-			rootOrNot = "root"
-		else:
-			rootOrNot = ""
-		outputFile.write(INDENT * indentCounter + rootOrNot + ' internode: ' + ' alive ' + str(self.alive) + \
-			' biomass ' + str(self.biomass) + " water " + str(self.water) + " minerals " + str(self.minerals) + \
-			" location " + str(self.location) + " forward " + self.forward + " side " + self.side)
-		outputFile.write("\n")
+		TreePart.describe(self, outputFile, indentCounter)
 		if not self.root:
 			for leafCluster in self.leafClusters:
 				leafCluster.describe(outputFile, indentCounter+1)
+		if not self.root:
+			for flowerCluster in self.flowerClusters:
+				flowerCluster.describe(outputFile, indentCounter+1)
+		if not self.root:
+			for fruitCluster in self.fruitClusters:
+				fruitCluster.describe(outputFile, indentCounter+1)
 		if self.apicalMeristem:
 			self.apicalMeristem.describe(outputFile, indentCounter+1)
 		for meristem in self.axillaryMeristems:
@@ -573,21 +622,30 @@ class LeafCluster(TreePart):
 		self.length = LEAF_CLUSTER_LENGTH_AT_CREATION
 		self.randomSway = random.randrange(RANDOM_LEAF_CLUSTER_SWAY) - RANDOM_LEAF_CLUSTER_SWAY // 2
 		self.newBiomass = 0
+		self.lowSunStress = 0
+		self.shadeStress = 0
+		self.lowWaterStress = 0
+		self.lowMineralStress = 0
 				
 	def nextDay_Uptake(self):
 		if self.alive:
-			sunProportion = sun[(self.location[0], self.location[1])]
+			self.lowSunStress = 1.0 - sun[(self.location[0], self.location[1])]
 			numBlocksShadingMe = blocksOccupiedAboveLocation(self.location, self)
-			if numBlocksShadingMe > 0:
-				shadeProportion = max(0.0, min(1.0, 1.0 - 1.0 * numBlocksShadingMe / SHADE_TOLERANCE))
-			else:
-				shadeProportion = 1.0
-			waterProportion = self.water / WATER_FOR_OPTIMAL_PHOTOSYNTHESIS
-			mineralsProportion = self.minerals / MINERALS_FOR_OPTIMAL_PHOTOSYNTHESIS
-			biomassProportion = self.biomass / OPTIMAL_LEAF_CLUSTER_BIOMASS
-			combinedEffectsProportion = sunProportion * 0.2 + shadeProportion + 0.2 + waterProportion + 0.2 + mineralsProportion * 0.2 + biomassProportion * 0.2
-			combinedEffectsProportion = max(0.0, min(1.0, combinedEffectsProportion))
-			sCurve = 1.0 - math.exp(-0.65 * combinedEffectsProportion)
+			self.shadeStress = max(0.0, min(1.0, 1.0 * numBlocksShadingMe / NUM_BLOCKS_ABOVE_FOR_MAX_SHADE_STRESS))
+			self.lowWaterStress = 1.0 - self.water / WATER_FOR_OPTIMAL_PHOTOSYNTHESIS
+			self.lowMineralStress = 1.0 - self.minerals / MINERALS_FOR_OPTIMAL_PHOTOSYNTHESIS
+			lowBiomassStress = 1.0 - self.biomass / OPTIMAL_LEAF_CLUSTER_BIOMASS
+			
+			lowSunStressFactor = self.lowSunStress * 0.2 * (1.0 - LOW_SUN_TOLERANCE)
+			shadeStressFactor = self.shadeStress * 0.2 * (1.0 - SHADE_TOLERANCE)
+			lowWaterStressFactor = self.lowWaterStress * 0.2 * (1.0 - WATER_STRESS_TOLERANCE)
+			lowMineralStressFactor = self.lowMineralStress * 0.2 * (1.0 - MINERAL_STRESS_TOLERANCE)
+			lowBiomassStressFactor = lowBiomassStress * 0.2 # no tolerance for this; small leaves make less food!
+			
+			combinedEffects = 1.0 - (lowSunStressFactor + shadeStressFactor + lowWaterStressFactor + lowMineralStressFactor + lowBiomassStressFactor)
+			combinedEffects = max(0.0, min(1.0, combinedEffects))
+			
+			sCurve = 1.0 - math.exp(-0.65 * combinedEffects)
 			self.newBiomass =  sCurve * OPTIMAL_LEAF_PHOTOSYNTHATE
 			#print sunProportion, numBlocksShadingMe, shadeProportion, waterProportion, mineralsProportion, biomassProportion
 			#print '.....', combinedEffectsProportion, sCurve, self.newBiomass
@@ -621,7 +679,7 @@ class LeafCluster(TreePart):
 		if DRAW_LEAF_CLUSTERS:
 			if self.length > 1:
 				spineEndLocation = endPointOfAngledLine(self.location, self.length, 
-							LEAF_CLUSTER_ANGLE_WITH_STEM, self.randomSway, self.forward, self.parent.forward, self.side)
+							LEAF_CLUSTER_ANGLE_WITH_STEM, self.randomSway, self.forward, self.parent.forward)
 				spine = locationsBetweenTwoPoints(self.location, spineEndLocation, self.length)
 				sizeProportion = 1.0 * self.length / LEAF_CLUSTER_LENGTH_AT_FULL_SIZE
 				# spine, pattern, angle, sides, sizeProportion, forward, side
@@ -663,12 +721,9 @@ class LeafCluster(TreePart):
 		self.minerals += mineralsIWillAccept
 		return mineralsIWillAccept
 	
-	def describe(self, outputFile, indentCounter=0):
-		outputFile.write(INDENT * indentCounter + ' leaf cluster: ' + ' alive ' + str(self.alive) + \
-			' biomass ' + str(self.biomass) + ' new ' + str(self.newBiomass) + " water " + str(self.water) + " minerals " + str(self.minerals) + \
-			" location " + str(self.location) + " forward " + self.forward + " side " + self.side)
-		outputFile.write('\n')
-		
+	def sumUpStresses(self):
+		return 1, self.lowSunStress, self.shadeStress, self.lowWaterStress, self.lowMineralStress
+				
 # -------------------------------------------------------------------------------------------
 class FlowerCluster(TreePart):
 # -------------------------------------------------------------------------------------------
@@ -698,7 +753,7 @@ class FlowerCluster(TreePart):
 		pass
 	
 	def nextDay_Growth(self):
-		if self.biomass >= OPTIMAL_FLOWER_CLUSTER_BIOMASS:
+		if self.age >= MINIMUM_DAYS_FLOWER_APPEARS_EVEN_WITH_OPTIMAL_BIOMASS and self.biomass >= OPTIMAL_FLOWER_CLUSTER_BIOMASS:
 			self.buildFruit()
 		else:
 			location, direction, side = self.parent.locationAndDirectionsForAxillaryMeristem(self.numberOnInternode)
@@ -711,7 +766,7 @@ class FlowerCluster(TreePart):
 		if DRAW_FLOWER_CLUSTERS:
 			if self.length > 1:
 				spineEndLocation = endPointOfAngledLine(self.location, self.length, 
-							FLOWER_CLUSTER_ANGLE_WITH_STEM, self.randomSway, self.forward, self.parent.forward, self.side)
+							FLOWER_CLUSTER_ANGLE_WITH_STEM, self.randomSway, self.forward, self.parent.forward)
 				spine = locationsBetweenTwoPoints(self.location, spineEndLocation, self.length)
 				sizeProportion = self.biomass / OPTIMAL_FLOWER_CLUSTER_BIOMASS
 				# # spine, pattern, angle, sides, sizeProportion, forward, side
@@ -734,12 +789,6 @@ class FlowerCluster(TreePart):
 		biomassIWillAccept = min(biomassOffered, biomassINeed)
 		self.biomass += biomassIWillAccept
 		return biomassIWillAccept
-		
-	def describe(self, outputFile, indentCounter=0):
-		outputFile.write(INDENT * indentCounter + ' flower cluster: ' + ' alive ' + str(self.alive) + \
-			' biomass ' + str(self.biomass) + " water " + str(self.water) + " minerals " + str(self.minerals) + \
-			" location " + str(self.location) + " forward " + self.forward + " side " + self.side)
-		outputFile.write('\n')
 		
 # -------------------------------------------------------------------------------------------
 class FruitCluster(TreePart):
@@ -773,7 +822,7 @@ class FruitCluster(TreePart):
 		if DRAW_FRUIT_CLUSTERS:
 			if self.length > 1:
 				spineEndLocation = endPointOfAngledLine(self.location, self.length, 
-							FRUIT_CLUSTER_ANGLE_WITH_STEM, self.randomSway, self.forward, self.parent.forward, self.side)
+							FRUIT_CLUSTER_ANGLE_WITH_STEM, self.randomSway, self.forward, self.parent.forward)
 				spine = locationsBetweenTwoPoints(self.location, spineEndLocation, self.length)
 				sizeProportion = 1.0 * self.length / FRUIT_CLUSTER_LENGTH_AT_FULL_SIZE
 				# # spine, pattern, angle, sides, sizeProportion, forward, side
@@ -796,13 +845,7 @@ class FruitCluster(TreePart):
 		biomassIWillAccept = min(biomassOffered, biomassINeed)
 		self.biomass += biomassIWillAccept
 		return biomassIWillAccept
-		
-	def describe(self, outputFile, indentCounter=0):
-		outputFile.write(INDENT * indentCounter + ' Fruit cluster: ' + ' alive ' + str(self.alive) + \
-			' biomass ' + str(self.biomass) + " water " + str(self.water) + " minerals " + str(self.minerals) + \
-			" location " + str(self.location) + " forward " + self.forward + " side " + self.side)
-		outputFile.write('\n')
-		
+				
 # -------------------------------------------------------------------------------------------
 class Tree():
 # -------------------------------------------------------------------------------------------
@@ -812,33 +855,64 @@ class Tree():
 		self.numInternodesCreated = 0
 		self.numRootInternodesCreated = 0
 		self.reproductivePhaseHasStarted = False
+		self.prevailingStressCondition = "no stress"
 		
 		self.seed = random.random()
 		random.seed(self.seed)
+		
 		self.firstInternodeSideDirection = DIRECTIONS[random.randrange(4)] # only choose from NESW, not up or down - first 4 in list
 		self.firstRootInternodeSideDirection = DIRECTIONS[random.randrange(4)]
 		
-		firstMeristem = Meristem(self, None, False, 0, self.location, "up", self.firstInternodeSideDirection, apical=True)
+		firstMeristem = Meristem(self, None, False, 0, 0, self.location, "up", self.firstInternodeSideDirection, apical=True)
 		self.firstInternode = firstMeristem.buildInternode(firstOnTree=True)
 		
-		firstRootMeristem = Meristem(self, None, True, 0, self.location, "down", self.firstRootInternodeSideDirection, apical=True)
+		firstRootMeristem = Meristem(self, None, True, 0, 0, self.location, "down", self.firstRootInternodeSideDirection, apical=True)
 		self.firstRootInternode = firstRootMeristem.buildInternode(firstOnTree=True)
 		
 	def nextDay(self):
 		if self.age == REPRODUCTIVE_MODE_STARTS_ON_DAY:
 			self.reproductivePhaseHasStarted = True
-			#print 'tree is sending first repro signal'
 			self.firstInternode.reproduce()
 		self.firstInternode.nextDay()
 		self.firstRootInternode.nextDay()
+		self.calculateStresses()
 		self.age += 1
 		
 	def describe(self, outputFile):
-		outputFile.write("tree\n")
+		outputFile.write('%s: \n' % self.__class__.__name__)
+		fields = self.__dict__
+		fieldKeysSorted = []
+		fieldKeysSorted.extend(fields.keys())
+		fieldKeysSorted.sort()
+		for key in fieldKeysSorted:
+			valueAsString = str(fields[key])
+			if not valueAsString.find("instance") >= 0:
+				outputFile.write('    ' + key + ": " + valueAsString + "\n")
+		outputFile.write("\n")
 		self.firstInternode.describe(outputFile)
 		self.firstRootInternode.describe(outputFile)
 		
+	def calculateStresses(self):
+		self.leafClusterCount, self.totalLowSunStress, self.totalShadeStress, self.totalLowWaterStress, \
+			self.totalLowMineralStress = self.firstInternode.sumUpStresses()
+		highestStress = max(self.totalLowSunStress, self.totalShadeStress, self.totalLowWaterStress, self.totalLowMineralStress)
+		if highestStress / self.leafClusterCount < MIN_STRESS_TO_TRIGGER_BIOMASS_REDISTRIBUTION:
+			if self.reproductivePhaseHasStarted:
+				self.prevailingStressCondition = "reproduction"
+			else:
+				self.prevailingStressCondition = "no stress"
+		elif highestStress == self.totalLowSunStress:
+			self.prevailingStressCondition = "low sun"
+		elif highestStress == self.totalShadeStress:
+			self.prevailingStressCondition = "shade"
+		elif highestStress == self.totalLowWaterStress:
+			self.prevailingStressCondition = "water"
+		elif highestStress == self.totalLowMineralStress:
+			self.prevailingStressCondition = "minerals"
+		
+# -------------------------------------------------------------------------------------------
 def growTree(outputFolder):
+# -------------------------------------------------------------------------------------------
 	
 	drawGraphs = False
 	if drawGraphs:
@@ -858,8 +932,8 @@ def growTree(outputFolder):
 		
 		numTrees = 1
 		print 'starting simulated growth with %s tree(s)...' % numTrees
-		daysPerPulse = 2
-		numPulses = 15
+		daysPerPulse = 3
+		numPulses = 10
 		trees = []
 		for i in range(numTrees):
 			if numTrees == 1:
@@ -872,7 +946,7 @@ def growTree(outputFolder):
 			newTree = Tree(xLocation, yLocation, zLocation)
 			trees.append(newTree)
 		if describeTrees:
-			outputFile.write("day zero\n")
+			outputFile.write("Day zero\n\n")
 			for tree in trees:
 				tree.describe(outputFile)
 		
@@ -880,7 +954,7 @@ def growTree(outputFolder):
 		for i in range(numPulses):
 			for j in range(daysPerPulse):
 				if describeTrees:
-					outputFile.write("day %s\n" % day)
+					outputFile.write("Day %s\n\n" % day)
 				for tree in trees:
 					tree.nextDay()
 					if describeTrees:
