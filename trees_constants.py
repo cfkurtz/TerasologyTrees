@@ -5,7 +5,12 @@
 # -----------------------------------------------------------------------------------------------------------------
 
 INDENT = '---->'
-DIRECTIONS = ["north", "east", "south", "west", "up", "down"]
+
+# -------------------------------------------------------------------------------------------
+# Space and drawing related constants.
+
+# These just have to do with setting up the (fake) world and looking at the drawings made.
+# -------------------------------------------------------------------------------------------
 
 SIZE_OF_SPACE_XY = 100
 SIZE_OF_SPACE_Z = 300
@@ -28,7 +33,11 @@ DRAW_MERISTEMS = True
 DRAW_FLOWER_CLUSTERS = True
 DRAW_FRUIT_CLUSTERS = True
 
-NUM_BLOCKS_ABOVE_FOR_MAX_SHADE_STRESS = 10
+# -------------------------------------------------------------------------------------------
+# Biomass distribution constants.
+
+# Removed these from the parameters file because 
+
 
 BIOMASS_DISTRIBUTION_SPREAD = {}
 BIOMASS_DISTRIBUTION_ORDER = {}
@@ -43,8 +52,8 @@ BIOMASS_DISTRIBUTION_ORDER["no stress"] = [
 
 # in low light or shade conditions, the plant shunts biomass to meristems so new stems can develop and reach for the light
 # root biomass distribution is unaffected
-BIOMASS_DISTRIBUTION_SPREAD["low sun or shade"] = [0.7, 0.4]
-BIOMASS_DISTRIBUTION_ORDER["low sun or shade"] = [
+BIOMASS_DISTRIBUTION_SPREAD["low sun and shade"] = [0.7, 0.4]
+BIOMASS_DISTRIBUTION_ORDER["low sun and shade"] = [
 	["child", "apical meristems", "axillary meristems", "leaves", "branches", "root", "flowers", "fruits", ],
 	["axillary meristems", "apical meristems", "branches", "child", "above-ground tree",],
 	]
