@@ -48,39 +48,30 @@ class TreePart():
 		self.matrix = matrix # should be new copy, not pointer to one already in use
 		self.blocks = []
 		
-	def nextDay(self, updateBlocks):
-		#print 'start', self.__class__.__name__, 'next day'
+	def nextDay(self):
 		# The next-day "signal" moves up the tree, with each part performing its daily calculations.
 		# Internodes, being the "pipes" of the system, handle making sure every part finds out
 		# about the signal.
 		# To start out, each part relinquishes all blocks in the world-space it had been occupying,
 		# on its way to claiming new blocks. In many cases parts will not move, but sometimes they will.
-		#print 'start', self.__class__.__name__, 'releaseAllUsedBlocks'
 		self.releaseAllUsedBlocks()
 		# Uptake is of photosynthate (for leaf clusters) or water and minerals (for root internodes).
-		#print 'start', self.__class__.__name__, 'nextDay_Uptake'
 		self.nextDay_Uptake()
 		# All tree parts use up a little biomass each day in maintenance respiration.
-		#print 'start', self.__class__.__name__, 'nextDay_Consumption'
 		self.nextDay_Consumption()
 		# Leaf clusters distribute new biomass to internodes; internode distribution biomass,
 		# water and minerals to their parents, children and dependents.
-		#print 'start', self.__class__.__name__, 'nextDay_Distribution'
 		self.nextDay_Distribution()
 		# In the growth method each part calculates its updated size.
-		#print 'start', self.__class__.__name__, 'nextDay_Growth'
 		self.nextDay_Growth()
 		# In the occupation method each part reclaims blocks in the space it should be occupying.
-		#print 'start', self.__class__.__name__, 'nextDay_BlockOccupation'
-		if updateBlocks:
-			self.nextDay_BlockOccupation()
+		self.nextDay_BlockOccupation()
 		# Finally the internodes tell their children about the next day signal.
-		#print 'start', self.__class__.__name__, 'nextDay_SignalPropagation'
-		self.nextDay_SignalPropagation(updateBlocks)
-		#print '     end', self.__class__.__name__, 'next day'
+		self.nextDay_SignalPropagation()
 		self.age += 1
 		
 	def nextDay_Uptake(self):
+		# these are here so classes that don't need them can leave them out.
 		pass
 	
 	def nextDay_Consumption(self):
@@ -92,16 +83,20 @@ class TreePart():
 	def nextDay_BlockOccupation(self):
 		pass
 	
-	def nextDay_SignalPropagation(self, updateBlocks):
+	def nextDay_SignalPropagation(self):
 		pass
 		
 	def die(self):
 		# When tree parts die, they don't fall off; they just change color (block ID).
 		# This prevents parts of the tree from disappearing and allows for interesting
-		# materials to be collected.
+		# materials to be collected. I have this as a simple flag, but it would be
+		# better to have a "dying period" over which a part gradually switches over
+		# rather than an instantaneous switch.
 		self.alive = False
 	
 	def releaseAllUsedBlocks(self):
+		# When a part recalculates its position it releases the blocks it had been occupying
+		# so other parts can take them up. 
 		for location in self.blocks:
 			roundedLocation = location.rounded()
 			releaseLocation(roundedLocation, self)
@@ -224,6 +219,7 @@ class Meristem(TreePart):
 		else:
 			self.matrix = self.parent.matrixForAxillaryMeristemOrBranchInternode(self.numberOnParentInternode, 0)
 		if DRAW_MERISTEMS:
+			# meristems are always only one block
 			self.claimStartBlock()
 		
 	# -------------------------------------------------------------------------------------------
@@ -360,7 +356,8 @@ class Internode(TreePart):
 	def matrixForApicalMeristemOrChildInternode(self, randomSway):
 		# new matrices have to be created every day, because the internode itself may have changed
 		# in length as it grew (and in end location if it is woody and is seeking sun/water/minerals)
-		# this is horribly inefficient and can most surely be improved in optimization
+		# this is horribly inefficient and could be improved in optimization
+		# but on the other hand, matrices are not huge things, and it's not the biggest bottleneck
 		newMatrix = self.matrix.makeCopy()
 		newMatrix.setLocation(self.endLocation.x, self.endLocation.y, self.endLocation.z)
 		newMatrix.move(1.0)
@@ -429,14 +426,16 @@ class Internode(TreePart):
 		self.fruitClusters.append(fruitCluster)
 				
 	def removeMeristemThatMadeInternode(self, meristem):
-		# after a meristem makes a new internode, it goes away
-		# because it becomes the internode
+		# after a meristem makes a new internode, it goes away, because it turns INTO the internode
 		if meristem.apical:
 			self.apicalMeristem = None
 		else:
 			self.axillaryMeristems.remove(meristem)
 			
 	def removeFlowerClusterThatMadeFruitCluster(self, flowerCluster):
+		# same here: a flower clusters becomes a fruit cluster
+		# the only reason to have them as separate classes (instead of one class with a flag)
+		# is in case you want to add very different behaviors later
 		self.flowerClusters.remove(flowerCluster)
 		
 	# -------------------------------------------------------------------------------------------
@@ -444,10 +443,17 @@ class Internode(TreePart):
 	# -------------------------------------------------------------------------------------------
 		
 	def nextDay_Uptake(self):
+		# I did once have that internodes could produce a small amount of photosynthate, 
+		# but I took it out because it doesn't change growth much,
+		# and it complicates the model for no useful reason, except possibly that
+		# you could remove all leaves from a tree and it might not quite die.
+		# But that doesn't seem all that compelling. Still, it would be easy to put back.
 		if self.root and self.alive:
 			x = int(round(self.endLocation.x))
 			y = int(round(self.endLocation.y))
 			z = int(round(self.endLocation.z))
+			# Note that the locations in the water, minerals and sun arrays are not rounded Point3Ds but tuples of ints
+			# (for no good reason)
 			availableWater, locationsConsidered = waterOrMineralsInRegion("water", self.endLocation, ROOT_WATER_EXTRACTION_RADIUS)
 			if availableWater > 0:
 				for locationTuple in locationsConsidered:
@@ -501,6 +507,9 @@ class Internode(TreePart):
 					toBeGivenAway = extra * biomassSpread
 					taken = part.acceptBiomass(toBeGivenAway)
 					self.biomass -= taken
+		# If you wanted to make the water and mineral distribution orders dependent on stress conditions,
+		# it would be fairly easy to create a similar set of arrays to those of biomass.
+		# I felt it would be complication without useful purpose, which I tried to trim.
 		parts = self.gatherDistributees(WATER_DISTRIBUTION_ORDER[self.root])
 		for part in parts:
 			if part:
@@ -519,7 +528,7 @@ class Internode(TreePart):
 					self.minerals -= taken
 				
 	def nextDay_Growth(self):
-		if self.alive:
+		if self.alive: # if not, stay the same size as you were when you died
 			self.woody = self.age > INTERNODES_TURN_WOODY_AFTER_THIS_MANY_DAYS
 			proportion = self.biomass / OPTIMAL_INTERNODE_BIOMASS[self.root]
 			if self.firstOnTree:
@@ -540,6 +549,9 @@ class Internode(TreePart):
 
 	def nextDay_BlockOccupation(self):
 		aboveGround = not self.root
+		# It is inefficient to get the matrix from the parent every day, especially when only the location has changed,
+		# not the orientation. If the matrix were separated into two parts (location, orientation) this could 
+		# be simplified a bit. Still, this is not the bottleneck.
 		if self.iAmABranchOffMyParent:
 			self.matrix = self.parent.matrixForAxillaryMeristemOrBranchInternode(self.numberOnParentInternode, self.randomSway)
 		else:
@@ -555,13 +567,30 @@ class Internode(TreePart):
 			locationsBetween = locationsBetweenTwoPoints(self.matrix.location, self.endLocation, pointsBetween, INTERNODE_LINE_DRAWING_METHOD)
 			self.claimSeriesOfBlocks(locationsBetween, aboveGround)
 			if self.width > 1:
+				# THIS is the bottleneck. When stems are wide, working out the circles perpendicular to the stem vector
+				# seems to take a very long time. A better way to do that would speed things up a lot.
 				for location in locationsBetween:
 					turns = 4 + self.width//2
 					diameterPattern = str(int(round(self.width/2)))
 					circleLocations = locationsForShapeAroundSpine(locationsBetween, diameterPattern, turns, 1.0, INTERNODES_ARE_HOLLOW[self.root], self.matrix)
 					self.claimSeriesOfBlocks(circleLocations, aboveGround)
 								
-	def nextDay_SignalPropagation(self, updateBlocks):
+	def nextDay_SignalPropagation(self):
+		# This pattern never varies and is not parameterized. 
+		# Of course everything dependent on the internode gets the signal first 
+		# (leaves, flowers, fruits, meristems). The only thing that could be different
+		# is whether the child (on the same stem) or branches (starting new stems)
+		# get the signal first. Running out to the end of the stem before
+		# handling branches just seems to work better in terms of growth.
+		# Note that this method and all the other signal methods are recursive.
+		# When a plant is huge you could theoretically exhaust stack sizes.
+		# However, if you have the "number of internodes allowed" parameter set
+		# to a reasonable size (100 or so) this should not be a problem in practice. 
+		# It could be a problem if people wanted to create really gigantic (world-sized)
+		# trees. In that case you would have to resort to what we used back in the day,
+		# a "traverser" which ran around the plant talking to parts and tying them
+		# all together without recursion. It's much nicer to use the recursion
+		# if you can, however.
 		sendSignalTo = []
 		if not self.root:
 			sendSignalTo.extend(self.leafClusters)
@@ -573,7 +602,7 @@ class Internode(TreePart):
 		sendSignalTo.extend(self.branches)
 		for sendTo in sendSignalTo:
 			if sendTo:
-				sendTo.nextDay(updateBlocks)
+				sendTo.nextDay()
 		
 	# -------------------------------------------------------------------------------------------
 	# methods used by next day methods
@@ -581,7 +610,8 @@ class Internode(TreePart):
 	# -------------------------------------------------------------------------------------------
 		
 	def acceptBiomass(self, biomassOffered):
-		# the internode, because it is a piping system, takes biomass it doesn't need so it can pass it on
+		# The internode, because it is a piping system, takes biomass it doesn't need so it can pass it on.
+		# So this is the one part that doesn't limit the amount of biomass (or anything else) it accepts.
 		self.biomass += biomassOffered
 		return biomassOffered
 	
@@ -605,7 +635,7 @@ class Internode(TreePart):
 					sendTo.reproduce()
 					
 	def die(self):
-		# when an internode dies, everything that depends on it dies too (only makes sense)
+		# When an internode dies, everything that depends on it dies too (which only makes sense).
 		sendSignalTo = []
 		if not self.root:
 			sendSignalTo.extend(self.leafClusters)
@@ -706,7 +736,6 @@ class LeafCluster(TreePart):
 		self.lowSunAndShadeStress = 0
 		self.lowWaterStress = 0
 		self.lowMineralStress = 0
-
 		if RANDOM_LEAF_CLUSTER_SWAY > 0:
 			self.randomSway = random.randrange(RANDOM_LEAF_CLUSTER_SWAY) - RANDOM_LEAF_CLUSTER_SWAY // 2
 		else:
@@ -730,12 +759,20 @@ class LeafCluster(TreePart):
 			if self.senescenceFactor > 0:
 				x = int(round(self.spineEndLocation.x))
 				y = int(round(self.spineEndLocation.y))
-				# there should not be a location outside of the sun space, but ...
 				if sun.has_key((x,y)):
 					sunAtEndOfLeafCluster = sun[(x,y)]
 				else:
 					sunAtEndOfLeafCluster = 0.0
-					
+				
+				# This equation (e to the minus pi times the factor) just generates
+				# a strong non-linear (sort of arc-shaped) reaction to each factor.
+				# You could parameterize this by allowing a species to choose between
+				# linear photosynthetic response (more hardy) and non-linear response (more demanding).
+				# I like the non-linear response because it enlarges the differences between
+				# trees (and leaves) growing under different conditions, which will make for
+				# greater variety of both overall health and tree shape based on conditions.
+				# However, if it is too tricky to grow trees using this method a linear
+				# option might be worth adding.
 				self.lowSunStress = math.exp(-math.pi * sunAtEndOfLeafCluster)
 				self.numBlocksShadingMe = 1.0 - blocksOccupiedAboveLocation(self.matrix.location, self)
 				if NUM_BLOCKS_ABOVE_FOR_MAX_SHADE_STRESS > 0:
@@ -754,9 +791,10 @@ class LeafCluster(TreePart):
 				proportionOfOptimalBiomass = max(0.0, min(1.0, self.biomass / OPTIMAL_LEAF_CLUSTER_BIOMASS))
 				lowBiomassFactor = math.exp(-math.pi * proportionOfOptimalBiomass)
 				
-				# the reason to make so many of these fields of the object is so you can look at them (using the describe method)
-				# if anything is going wrong to see what is causing the tree not to grow
-				# they do cause extra overhead however and could be stripped out of the object later
+				# The reason to make so many of these not local variables but fields of the object 
+				# is so you can look at them (using the describe method) in the "report" file.
+				# That way if anything is going wrong you can see what is causing the tree not to grow.
+				# However the fields do cause extra overhead, and they could be stripped out of the object later.
 				self.lowSunAndShadeStressFactor = self.lowSunAndShadeStress * 0.25 * (1.0 - LOW_SUN_AND_SHADE_TOLERANCE)
 				self.lowWaterStressFactor = self.lowWaterStress * 0.25 * (1.0 - WATER_STRESS_TOLERANCE)
 				self.lowMineralStressFactor = self.lowMineralStress * 0.25 * (1.0 - MINERAL_STRESS_TOLERANCE)
@@ -981,12 +1019,6 @@ class Tree():
 
 	def __init__(self, x, y, z):
 		self.age = 0
-		
-		self.trunkMatrix = Matrix3D(0.0, 0.0, 0.0)
-		self.trunkMatrix.initializeAsUnitMatrix()
-		self.trunkMatrix.setLocation(x, y, z)
-		self.trunkMatrix.rotateY(90)
-		
 		self.numInternodesCreated = 0
 		self.numRootInternodesCreated = 0
 		self.reproductivePhaseHasStarted = False
@@ -994,6 +1026,11 @@ class Tree():
 		
 		self.seed = random.random()
 		random.seed(self.seed)
+		
+		self.trunkMatrix = Matrix3D(0.0, 0.0, 0.0)
+		self.trunkMatrix.initializeAsUnitMatrix()
+		self.trunkMatrix.setLocation(x, y, z)
+		self.trunkMatrix.rotateY(90)
 		
 		self.rootMatrix = self.trunkMatrix.makeCopy()
 		self.rootMatrix.rotateY(180)
@@ -1005,12 +1042,12 @@ class Tree():
 		firstRootMeristem = Meristem(self, None, True, 0, 0, self.rootMatrix, apical=True)
 		self.firstRootInternode = firstRootMeristem.buildInternode(firstOnTree=True)
 		
-	def nextDay(self, updateBlocks):
+	def nextDay(self):
 		if self.age == REPRODUCTIVE_MODE_STARTS_ON_DAY:
 			self.reproductivePhaseHasStarted = True
 			self.firstInternode.reproduce()
-		self.firstInternode.nextDay(updateBlocks)
-		self.firstRootInternode.nextDay(updateBlocks)
+		self.firstInternode.nextDay()
+		self.firstRootInternode.nextDay()
 		self.calculateStresses()
 		self.age += 1
 		
@@ -1046,7 +1083,7 @@ class Tree():
 		self.firstRootInternode.describe(outputFile)
 		
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-def growTree(outputFolder):
+def growTree(outputFolder, iteration):
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	drawGraphs = False
 	if drawGraphs:
@@ -1056,15 +1093,15 @@ def growTree(outputFolder):
 			drawWaterDistribution(outputFolder)
 		if PATCHY_MINERALS:
 			drawMineralsDistribution(outputFolder)
+			
 	describeTrees = True
 	if describeTrees:
-		outputFileName = outputFolder + 'Tree growth recording.txt'
+		outputFileName = outputFolder + 'Tree growth recording species %s number %s.txt' % (SPECIES, iteration+1)
 		outputFile = open(outputFileName, 'w')
+		
 	try:
 		numTrees = 1
 		print 'starting simulated growth with %s tree(s)...' % numTrees
-		daysPerPulse = 1
-		numPulses = 40
 		trees = []
 		for i in range(numTrees):
 			if numTrees == 1:
@@ -1076,10 +1113,14 @@ def growTree(outputFolder):
 			zLocation = GROUND_LEVEL+1
 			newTree = Tree(xLocation, yLocation, zLocation)
 			trees.append(newTree)
+			
 		if describeTrees:
 			outputFile.write("Day zero\n\n")
 			for tree in trees:
 				tree.describe(outputFile)
+				
+		numPulses = 3
+		daysPerPulse = 10
 		day = 1
 		for i in range(numPulses):
 			for j in range(daysPerPulse):
@@ -1087,38 +1128,26 @@ def growTree(outputFolder):
 				if describeTrees:
 					outputFile.write("Day %s\n\n" % day)
 				for tree in trees:
-					dayToDraw = j == daysPerPulse-1
-					tree.nextDay(updateBlocks=True)
+					tree.nextDay()
 					if describeTrees:
 						tree.describe(outputFile)
-					day += 1
+				day += 1
 			print '  drawing space on day %s...' % (day-1)
- 			drawSpace(day-1, outputFolder, drawTrees=True)#, drawSun=True, drawWater=True, drawMinerals=True, drawSurface=True)
+ 			drawSpace(day-1, outputFolder, iteration+1, drawTrees=True, drawSun=True)#, drawSurface=False, drawWater=True, drawMinerals=True)
 	finally:
 		if describeTrees:
 			outputFile.close()
 	print 'done'
 	
 def main():
-	global SPECIES
-	loopThroughSpecies = True
-	specimensPerSpecies = 5
-	if loopThroughSpecies:
-		for aSpecies in ALL_SPECIES:
-			SPECIES = aSpecies
-			for i in range(specimensPerSpecies):
-				outputFolder = setUpOutputFolder("/Users/cfkurtz/Documents/personal/terasology/generated images/")
-				print 'writing files to:', outputFolder
-				space.clear()
-				growTree(outputFolder)
-	else:
+	runsPerSpecies = 1
+	for i in range(runsPerSpecies):
 		outputFolder = setUpOutputFolder("/Users/cfkurtz/Documents/personal/terasology/generated images/")
+		#outputFolder = "/Users/cfkurtz/Documents/personal/terasology/generated images/batch/"
 		print 'writing files to:', outputFolder
 		space.clear()
-		growTree(outputFolder)
+		growTree(outputFolder, i)
 	
 if __name__ == "__main__":
-	#import profile
-	#profile.run('main()', 'profiletest')
 	main()
 	

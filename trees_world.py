@@ -74,7 +74,7 @@ DRAW_FLOWER_CLUSTERS = True
 DRAW_FRUIT_CLUSTERS = True
 
 # "biomass", "water", "minerals", "photosynthate", "parts"
-COLOR_MAP = "parts"
+COLOR_MAP = "photosynthate"
 
 space = {}
 
@@ -311,7 +311,7 @@ def colorForLocation(location):
 # drawing of the blocky world it could be discarded.
 # -------------------------------------------------------------------------------------------
 
-def drawSpace(age, outputFolder, drawTrees=True, drawSun=False, drawWater=False, drawMinerals=False, drawSurface=False):
+def drawSpace(age, outputFolder, iteration, drawTrees=True, drawSun=False, drawWater=False, drawMinerals=False, drawSurface=False):
 	allXValues = []
 	allYValues = []
 	allZValues = []
@@ -376,7 +376,7 @@ def drawSpace(age, outputFolder, drawTrees=True, drawSun=False, drawWater=False,
 		allYValues.extend(yValues)
 		allZValues.extend(zValues)
 		allColors.extend(colors)
-	filename = "Tree growth age %s" % age
+	filename = "Tree growth species %s number %s age %s" % (SPECIES, iteration, age)
 	graphPNG3DScatter(allXValues, allYValues, allZValues, allColors, SIZE_OF_SPACE_XY, "x", "y", "z", "tree growth", filename, outputFolder)
 	
 def drawSunDistribution(outputFolder):
@@ -394,6 +394,7 @@ def sunBlocksToGraph():
 			if sun[(i,j)] > 0:
 				xValues.append(i)
 				yValues.append(j)
+				#zValues.append(SIZE_OF_SPACE_Z - 1)
 				zValues.append(0)
 				color = autumn(sun[(i,j)])
 				colors.append(color)
@@ -483,6 +484,7 @@ def graphPNG3DScatter(xValues, yValues, zValues, colors, SIZE_OF_SPACE_XY, xAxis
 	axes.set_zlim3d(lowest, highest*3) 
 	axes.view_init(20, 120)
 	
+	# failed attempts to draw a plane at ground level :(
 	#plt.axvline(0, color='r', linewidth=2)
 	#axes.bar([100], [100], [GROUND_LEVEL+1], zdir='z', color='b', alpha=0.8)
 	
@@ -513,6 +515,7 @@ def graphPNG3DScatter(xValues, yValues, zValues, colors, SIZE_OF_SPACE_XY, xAxis
 		print "could not save %s: %s" % (graphName, e)
 		
 def setUpOutputFolder(folder):
+	# This just sets up numbered folders for each run, to prevent files bumping into each other.
 	folderList = os.listdir(folder)
 	highestFolderNumber = 0
 	for folderName in folderList:

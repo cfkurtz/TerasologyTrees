@@ -24,8 +24,8 @@ from math import sqrt, atan, sin, cos, pi
 # Movement and rotation in space.
 
 # This is actually some code from our original 3D turtle we used in our plant simulator
-# more than a decade ago. It is probably very inefficient, and there may be many better ways
-# to calculate movement in 3D space using vectors by now. But this does work.
+# more than a decade ago. It is inefficient, and there may be many better ways
+# to calculate movement in 3D space using vectors. But it does work.
 # -------------------------------------------------------------------------------------------
 
 class Point3D:
@@ -168,6 +168,9 @@ class Matrix3D:
 # the voxel with all values truncated, and the voxel with all values rounded.
 # This makes it nearly impossible to get perfectly one-width lines, but
 # it is necessary when lines are to be set at arbitrary angles.
+# Because that was slow, and to get more variety two more methods were added.
+# Presumably you could have even more methods to create a wider variety
+# of ways lines are drawn to create internodes.
 def locationsBetweenTwoPoints(firstLocation, secondLocation, length, lineMethod="solid"):
 	locations = []
 	intLength = int(round(length))
@@ -177,6 +180,10 @@ def locationsBetweenTwoPoints(firstLocation, secondLocation, length, lineMethod=
 		y = firstLocation.y + proportion * (secondLocation.y - firstLocation.y)
 		z = firstLocation.z + proportion * (secondLocation.z - firstLocation.z)
 		if lineMethod == "spiral":
+			# This is the most brute-force and stupid method of all:
+			# we just jog the arm of the line writer as it goes, 
+			# to try and create a rough spiral. It is just a first try (thrown in quickly)
+			# and should be improved upon.
 			remainder = i % 3
 			if remainder == 0:
 				x += 1.0
@@ -213,7 +220,8 @@ def locationsForShapeAroundSpine(spine, pattern, numSides, sizeProportion, hollo
 		sideExtent = int(pattern[shapeLookupIndex])
 		sideExtentConsideringProportion = max(0, min(sideExtent, int(round(sizeProportion * sideExtent))))
 		turnMatrix.setLocation(location.x, location.y, location.z)
-		for sideNumber in range(numSides):
+		intNumSides = int(numSides)
+		for sideNumber in range(intNumSides):
 			turnMatrix.rotateY(turnDegrees)
 			sideEndLocation = turnMatrix.calculateMove(sideExtentConsideringProportion)
 			if hollow:

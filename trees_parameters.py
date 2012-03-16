@@ -16,20 +16,19 @@
 # limitations under the License.
 # -----------------------------------------------------------------------------------------------------------------
 
-# Note: If you read the comments in this file from top to bottom you will understand it better.
-# The lower comments assume understandings from above so as to avoid massive repetition.
+import sys
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 # BIOMASS
 
 # Biomass is undifferentiated plant material, which includes living tissues and plant
-# sugars used to store energy. All tree contain, require and use biomass, and it serves
+# sugars used to store energy. All tree parst contain, require and use biomass. It serves
 # as the "currency" into which all new growth is converted as it is passed around the tree.
 
 # Each tree part has a starting biomass, which it had when it was created by a meristem
 # or internode, and an optimal biomass, which it seeks to obtain (by making photosynthate
-# in the case of leaves, by pleading in the case of everyone else). Each tree part
+# in the case of leaves, by pleading in the case of everything else). Each tree part
 # uses up some small amount of biomass each day through maintenance respiration, 
 # and if the "stock" of living biomass in any part goes below its (parameterized) minimum,
 # it dies. Death does not make a tree part disappear, just change color/block ID into a
@@ -42,6 +41,8 @@ START_MERISTEM_BIOMASS = [1.0, 1.0]
 # The amount of biomass deposited in a meristem when it is first created.
 # Note: for all parameters that impact both stems and roots, the first in the list is stems, the second is roots.
 # Note: The "unit" for biomass is ... meaningless, magical, made up.
+# (In real crop simulation models it is usually tons per hectare or some other
+# measure of mass per area of soil surface. Alternatively it could be simply mass.)
 # min: above the death level by a few days' worth; should always be lower than the optimum
 # max: can make this number large if you want the tree to grow very fast (it is like having a very nutrient-rich seed)
 
@@ -55,7 +56,7 @@ BIOMASS_TO_MAKE_ONE_PHYTOMER = [10.0, 8.0]
 
 BIOMASS_TO_MAKE_ONE_FLOWER_CLUSTER = 10.0
 # The amount of biomass the meristem needs to accumulate before it can produce one cluster of flowers,
-# when the plant is in reproductive mode and the meristem has "gone reproductive".
+# when the tree is in reproductive mode and the meristem has "gone reproductive".
 # min: 1 or 2 more than what the meristem has at the start
 # max: for a tree with only one flower cluster, you could make this huge, but then you might never get any
 
@@ -66,8 +67,8 @@ BIOMASS_USED_BY_MERISTEM_PER_DAY = [0.1, 0.1]
 
 MERISTEM_DIES_IF_BIOMASS_GOES_BELOW = [0.01, 0.01]
 # How little biomass a meristem can have before it kicks the bucket.
-# min: a plant that can never die could have this set at zero
-# max: a hard-to-please plant could have this set higher, say 1.0
+# min: a tree that can never die could have this set at zero
+# max: a hard-to-please tree could have this set higher, say 1.0
 
 START_INTERNODE_BIOMASS = [1.0, 1.0]
 OPTIMAL_INTERNODE_BIOMASS = [13.0, 13.0]
@@ -211,7 +212,8 @@ INTERNODES_TURN_WOODY_AFTER_THIS_MANY_DAYS = [8, 8]
 ROOTS_CAN_GROW_THIS_MANY_BLOCKS_ABOVE_GROUND = 0
 # Allows aerial roots if set above zero. This means nothing but that they can grow
 # above the level set as ground level. Any root internodes above the ground cannot
-# draw on water or minerals, because they have ventured outside the deposits.
+# draw on water or minerals, because they have ventured outside the deposits;
+# so if they seek water and minerals they may not stay above ground.
 # min: if zero, no roots go above ground (this is the normal case); if above zero,
 # produces aerial roots; if below zero, keeps all root branches below that level
 # max: probably would look strange if this was very high!
@@ -224,7 +226,7 @@ ROOTS_CAN_GROW_THIS_MANY_BLOCKS_ABOVE_GROUND = 0
 # These parameters determine how the tree responds to stress conditions by remobilizing
 # photosynthate to parts of the tree that can help remedy the situation.
 
-# The parameters in this section are more advanced, in that changing them is likely to 
+# The parameters in this section are more advanced, in that changing them might 
 # break plant growth entirely. Still, they can be changed to create species that respond
 # differently to the conditions they find.
 
@@ -232,7 +234,7 @@ ROOTS_CAN_GROW_THIS_MANY_BLOCKS_ABOVE_GROUND = 0
 
 MIN_STRESS_TO_TRIGGER_BIOMASS_REDISTRIBUTION = 0.5
 # Each day the tree calculates its most pressing need: for sun, water or minerals.
-# If that maximum stress factor exceeds this amount, the plant will remobilize its
+# If that maximum stress factor exceeds this amount, the tree will remobilize its
 # biomass (not water or minerals) to respond to the crisis. Thus the parameter 
 # defines to what extent the tree responds to prevailing conditions by varying
 # its growth pattern.
@@ -275,7 +277,7 @@ BIOMASS_DISTRIBUTION_ORDER["water or mineral stress"] = [
 	["child", "apical meristems", "axillary meristems", "branches",  "above-ground tree",],
 	]
 
-# When the plant enters reproductive mode, everything moves to the flowers, then fruits
+# When the tree enters reproductive mode, everything moves to the flowers, then fruits
 # even extra biomass in the roots is pulled up to be used for reproduction.
 # Stress factors are put aside as all means are sent to reproduction (for good or ill).
 BIOMASS_DISTRIBUTION_SPREAD["reproduction"] = [0.7, 0.7]
@@ -288,7 +290,8 @@ BIOMASS_DISTRIBUTION_ORDER["reproduction"] = [
 # workings of the xylem and phloem. (At least, I can find a lot of information on the remobilization 
 # of plant MATTER in response to stress conditions, but nothing on the remobilization of actual
 # water or minerals. Methinks plants are limited in how much they can pump water by the laws
-# of physics and gravity and so on. It would also complicate the model a lot more...
+# of physics and gravity and so on. It would also complicate the model a lot more and add several
+# more complex parameters.
 WATER_DISTRIBUTION_SPREAD_PERCENT = [0.4, 0.4]
 WATER_DISTRIBUTION_ORDER = [["leaves", "child", 'branches'], ["above-ground tree", 'parent'],]
 
@@ -299,7 +302,7 @@ MINERALS_DISTRIBUTION_ORDER = [["leaves", "child", 'branches'],["above-ground tr
 
 # BRANCHING
 
-# These determine how the tree will form a shape, mainly by changing how meristems are placed
+# These parameters determine how the tree will form a shape, mainly by changing how meristems are placed
 # and how they become active.
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -385,8 +388,7 @@ MINIMUM_DAYS_FLOWER_APPEARS_EVEN_WITH_OPTIMAL_BIOMASS = 6
 
 # DRAWING: LENGTHS, WIDTHS, ANGLES
 
-# The drawing parameters produce the look of the tree: how tall and thick it is, what blocks
-# it uses, and so on.
+# The drawing parameters produce the look of the tree: how tall and thick it is, what angles it places.
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -430,9 +432,9 @@ INTERNODE_WIDTH_AT_CREATION = [1.0, 1.0]
 INTERNODES_ARE_HOLLOW = [True, True]
 # Whether internodes occupy all of the space they map out or whether they only occupy the outside.
 # Has no effect when internode width is set low (1 or 2). 
-# When solid internodes are not required, speeds up growth.
+# When solid internodes are not required, this speeds up growth.
 
-INTERNODE_LINE_DRAWING_METHOD = "spiral"
+INTERNODE_LINE_DRAWING_METHOD = "solid"
 # By what algorithm internode lines are interpolated through voxel space.
 # Choose from "solid" (inclusive of both sides of floating-point positions, thicker when the line is diagonal),
 # "sparse" (a thin line, possibly missing some corner turnings where the floating-point position is close to an edge),
@@ -464,7 +466,6 @@ RANDOM_INTERNODE_SWAY = [10.0, 10.0]
 # Adds a random angle of sway to each internode when created, to simulate variation in growth.
 # min: for a completely ordered tree set these to zero
 # max: no maximum really, but you will get very strange trees if this is set very high
-# cfk test low and high
 # all angles can be real numbers
 
 LEAF_CLUSTER_GROWTH_IN_LENGTH_AT_FULL_SIZE = 4.0
@@ -520,7 +521,7 @@ LEAF_CLUSTER_SIDES = 1
 # to create a plane (which represents not a leaf but all the twigs and leaves at the end of a branch),
 # but you could have stranger leaf clusters if you wanted to.
 # must be an integer
-# min: 1 cfk test 1
+# min: 1 
 # max: probably above 8 or so repetitions the results will be indistinguishable
 
 LEAF_CLUSTERS_ARE_HOLLOW = False
@@ -569,9 +570,9 @@ COLOR_FRUIT_CLUSTER_DEAD = "#5E2605"
 # TEST "SPECIES" PARAMETER SETS
 
 # Of course you would not really read in parameters this way; you would read them 
-# from files, bound each one at a reasonable min and max (so it would be hard to break
-# the model), and give any non-specified parameters the default value.
-# I just did it this way because I ran out of time.
+# from data files, bound each value with a reasonable min and max (so it would be hard to break
+# the model), and give any non-specified parameters a default value.
+# I just did it this way because I ran out of time to do it right.
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -579,18 +580,25 @@ COLOR_FRUIT_CLUSTER_DEAD = "#5E2605"
 # and tried to partially implement them. All of these could be improved given more time
 # and most imply some additional links between the tree growth model and the rest of the game.
 
-# Note: All these tree species have parameters that make them grow way too fast for the game.
+# Note: All these tree species have parameters that make them grow far too fast for the game.
 # This is just because I couldn't stand to wait long enough for any plant to grow to 1000 days old.
 # But in the real game a plant that takes 1000 days to grow to its full size would be fine.
+# So in integration these parameters would have to be shifted down, particularly those
+# that generate massive amounts of photosynthate for new growth.
 
 #SPECIES = "Lift tree"
 #SPECIES = "Spiral tree"
 #SPECIES = "Bulb tree"
 #SPECIES = "Hobble tree"
-#SPECIES = "Tap tree"
-SPECIES = "Christmas tree"
+#SPECIES = "Taproot tree"
+#SPECIES = "Christmas tree"
 
-ALL_SPECIES = ["Lift tree", "Spiral tree", "Bulb tree", 'Hobble tree', "Tap tree", "Christmas tree"]
+if len(sys.argv) > 1: 
+	SPECIES = sys.argv[1]
+else:
+	SPECIES = "default"
+
+ALL_SPECIES = ["Lift tree", "Spiral tree", "Bulb tree", 'Hobble tree', "Taproot tree", "Christmas tree"]
 	
 if SPECIES == "Lift tree":
 	# Notes from  "terasology tree notes" file
@@ -781,7 +789,7 @@ elif SPECIES == "Hobble tree":
 	FRUIT_CLUSTER_ANGLE_WITH_STEM = 80.0
 	RANDOM_FRUIT_CLUSTER_SWAY = 20.0
 	
-elif SPECIES == "Tap tree":
+elif SPECIES == "Taproot tree":
 	# Name: Tap tree
 	# Like: desert trees with very long tap roots	
 	# Exaggeration: Tree has huge root that goes down far into the earth.	
@@ -919,7 +927,7 @@ elif SPECIES == "default":
 	INTERNODE_LENGTH_AT_CREATION = [3.0, 2.0] 
 	FIRST_INTERNODE_GROWTH_IN_LENGTH_AT_FULL_SIZE = [15.0, 13.0]
 	FIRST_INTERNODE_LENGTH_AT_CREATION = [5.0, 5.0]
-	INTERNODE_GROWTH_IN_WIDTH_AT_FULL_SIZE = [2.0, 2.0]
+	INTERNODE_GROWTH_IN_WIDTH_AT_FULL_SIZE = [1.0, 1.0]
 	INTERNODE_WIDTH_AT_CREATION = [1.0, 1.0]
 	INTERNODES_ARE_HOLLOW = [True, True]
 	ANGLE_BETWEEN_STEM_AND_BRANCH_OFF_TRUNK = [45, 45]
