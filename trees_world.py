@@ -32,7 +32,7 @@ import matplotlib.cm as cm
 import matplotlib.colors as mpcolors
 
 blues = cm.get_cmap("Blues")
-copper = cm.get_cmap("copper")
+copper = cm.get_cmap("Oranges")
 autumn = cm.get_cmap("autumn")
 heatmap = cm.get_cmap("jet")
 greens = cm.get_cmap("YlGn")
@@ -74,7 +74,7 @@ DRAW_FLOWER_CLUSTERS = True
 DRAW_FRUIT_CLUSTERS = True
 
 # "biomass", "water", "minerals", "photosynthate", "parts"
-COLOR_MAP = "photosynthate"
+COLOR_MAP = "minerals"
 
 space = {}
 
@@ -284,12 +284,12 @@ def colorForLocation(location):
 						else:
 							color = COLOR_FRUIT_CLUSTER_DEAD
 					return mpcolors.colorConverter.to_rgba(color)
+				# these maxima have been determined by trial and error (mostly the latter)
 				elif COLOR_MAP == "water":
-					proportion = max(0.0, min(1.0, treePart.water / 20.0))
+					proportion = max(0.0, min(1.0, treePart.water / 5.0))
 					return blues(proportion)
 				elif COLOR_MAP == "minerals":
-					proportion = max(0.0, min(1.0, treePart.minerals / 20.0))
-					print proportion
+					proportion = max(0.0, min(1.0, treePart.minerals / 5.0))
 					return copper(proportion)
 				elif COLOR_MAP == "biomass":
 					proportion = max(0.0, min(1.0, treePart.biomass / 50.0))

@@ -1133,7 +1133,8 @@ def growTree(outputFolder, iteration):
 						tree.describe(outputFile)
 				day += 1
 			print '  drawing space on day %s...' % (day-1)
- 			drawSpace(day-1, outputFolder, iteration+1, drawTrees=True, drawSun=True)#, drawSurface=False, drawWater=True, drawMinerals=True)
+ 			drawSpace(day-1, outputFolder, iteration+1, drawTrees=True, 
+					drawSun=False, drawSurface=False, drawWater=False, drawMinerals=True)
 	finally:
 		if describeTrees:
 			outputFile.close()
